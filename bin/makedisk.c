@@ -35,7 +35,10 @@ int deploy_file(struct component inConfig, int inSec, unsigned char *inImg);
 /* 関数ツリー
  * main
  *  ├read_conf
- * 
+ *  │ └get_1line
+ *  ├img_init
+ *  ├deploy_file
+ *  └out_file
  */
 
 /*
