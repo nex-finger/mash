@@ -1,6 +1,8 @@
 ; second
 ; TAB=4
 
+        ORG     0x8000
+
         JMP     secMain
 
 ; --- 変数 ---
@@ -17,12 +19,19 @@ secMain:
 
 ; --- テスト ---
 secTest:
-        MOV     DX, 0x1234
-        CALL    printHex
+        ;MOV     DX, 0x1234
+        ;CALL    printHex
         ;RET
         PUSH    CS
         POP     DS
         MOV     DL, [secCursolX]
+
+        ;MOV     AH, 0x0e
+        ;MOV     AL, DL
+        ;MOV     BX, 0x0000
+        ;INT     0x10
+        ;RET
+
         MOV     DH, [secCursolY]
         CALL    printHex
         RET
