@@ -85,6 +85,7 @@ secInitReg:
         ADD BYTE[.cntLine], 0x01
         CMP BYTE[.cntLine], 0x03
         JNZ     .printLoop              ; 3行表示したら終わり
+
         JMP     secMemChk
 
 .cntCol:
@@ -96,9 +97,54 @@ secInitReg:
 .colChar:
         DB      ":"
 
-; --- 使用可能メモリの確認 ---
+; --- メモリの確認 ---
 secMemChk:
+        MOV     AH, 0x13                ; 前表示
+        MOV     AL, 0x01
+        MOV     BH, 0x00
+        MOV     BL, 0x0f
+        MOV     CX, 0x0e
+        MOV     DL, [secCursolX]
+        MOV     DH, [secCursolY]
+        MOV     BP, .preMsg
+        INT     0x10
+        ADD BYTE[secCursolX], 0x0e        
 
+        MOV     SI, 0x0000              ; カウント初期化
+.chkLoop:
+        MOV     AH, [SI]                ; もとあったメモリを保存
+
+        MOV BYTE [SI], 0x55
+        MOV BYTE AL, [SI]
+        CMP     AL, 0x55
+        JNZ     secHlt                  ; 0x55 じゃなければエラー
+
+        MOV BYTE [SI], 0xaa
+        MOV BYTE AL, [SI]
+        CMP     AL, 0xaa
+        JNZ     secHlt                  ; 0xaa じゃなければエラー
+
+        MOV     [SI], AH                ; もとあったメモリを復元
+        PUSH    SI                      ; BPを表示
+        POP     DX
+        CALL    printHex
+        SUB BYTE[secCursolX], 0x06      ; 繰り返すので戻す
+        INC     SI
+
+        CMP     SI, 0x8000
+        JNZ     .chkLoop                ; 0x7fff まで読んだら終わり
+
+.chkDone:
+        ADD BYTE[secCursolX], 0x07      ; 次の表示のため
+        CALL    printDone
+        MOV BYTE[secCursolX], 0x00      ; 座標を次の行の先頭へ
+        ADD BYTE[secCursolY], 0x01
+        JMP     secDiskChk
+
+.preMsg:                                ; "Memory test..."~
+        DB      "M", "e", "m", "o", "r", "y", " ", "t", "e", "s", "t", ".", ".", "."
+
+secDiskChk:
         
         ;CALL    secTest
         CALL    secHlt
@@ -231,6 +277,38 @@ printHex:
 
 .msg:                                   ; 表示する4バイト(0xnnnn)
         DB      "0", "x", "0", "0", "0", "0"
+
+printDone:
+        MOV     AH, 0x13
+        MOV     AL, 0x01
+        MOV     BH, 0x00
+        MOV     BL, 0x0f
+        MOV     CX, 0x05
+        MOV     DL, [secCursolX]
+        MOV     DH, [secCursolY]
+        MOV     BP, .msg
+        INT     0x10
+        ADD BYTE[secCursolX], 0x05
+        RET
+.msg:                                   ; ~"kB, done."
+        DB      "d", "o", "n", "e", "."
+
+printError:
+        MOV     AH, 0x13
+        MOV     AL, 0x01
+        MOV     BH, 0x00
+        MOV     BL, 0x0f
+        MOV     CX, 0x06
+        MOV     DL, [secCursolX]
+        MOV     DH, [secCursolY]
+        MOV     BP, .msg
+        INT     0x10
+        ADD BYTE[secCursolX], 0x06
+        RET
+.msg:                                   ; ~"kB, done."
+        DB      "e", "r", "r", "o", "r", "!"
+
+
 
 ; --- 0埋め ---
 secEnd:
