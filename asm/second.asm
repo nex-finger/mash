@@ -185,7 +185,7 @@ secDiskChk:
         CALL    printDone
         MOV BYTE[secCursolX], 0x00      ; 座標を次の行の先頭へ
         ADD BYTE[secCursolY], 0x01
-        JMP     secDirInit
+        JMP     secLoadShell
 .chkError:
         ADD BYTE[secCursolX], 0x07      ; 次の表示のため
         CALL    printError
@@ -193,8 +193,18 @@ secDiskChk:
 .preMsg:                                ; "Disk test..."
         DB      "D", "i", "s", "k", " ", "t", "e", "s", "t", ".", ".", "."
         
-secDirInit:
-        ;CALL    secTest
+secLoadShell:
+        MOV     DX, 0x0005              ; LBA 5~20 の16セクタを 0x0000 に展開
+        CALL    lbaToChs
+
+        MOV     AH, 0x02
+        MOV     AL, 0x10
+        MOV     DL, 0x00
+        MOV     BX, 0x0000
+        INT     0x13
+
+        JMP     0x0000                  ; 移動
+
         CALL    secHlt
 
 ; --- テスト ---
