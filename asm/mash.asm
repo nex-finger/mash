@@ -33,7 +33,7 @@ cVersionLen:                                ; 版数文字列の長さ
         DW      18
 
 cVersionStr:                                ; 版数文字列の内容
-        DB      "mash system v0.1.0"
+        DB      "mash system v0.1.1"
 
 ; --- 変数 ---
 ;  ██████╗████████╗ █████╗ ████████╗██╗ ██████╗
