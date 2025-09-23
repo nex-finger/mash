@@ -192,8 +192,19 @@ secDiskChk:
         JMP     secHlt
 .preMsg:                                ; "Disk test..."
         DB      "D", "i", "s", "k", " ", "t", "e", "s", "t", ".", ".", "."
-        
+
 secLoadShell:
+        MOV     AH, 0x13                ; 前表示
+        MOV     AL, 0x01
+        MOV     BH, 0x00
+        MOV     BL, 0x0f
+        MOV     CX, 0x0f
+        MOV     DL, [secCursolX]
+        MOV     DH, [secCursolY]
+        MOV     BP, .preMsg
+        INT     0x10
+        ADD BYTE[secCursolX], 0x0f
+
         MOV     DX, 0x0005              ; LBA 5~20 の16セクタを 0x0000 に展開
         CALL    lbaToChs
 
@@ -206,25 +217,8 @@ secLoadShell:
         JMP     0x0000                  ; 移動
 
         CALL    secHlt
-
-; --- テスト ---
-secTest:
-        ;MOV     DX, 0x1234
-        ;CALL    printHex
-        ;RET
-        PUSH    CS
-        POP     DS
-        MOV     DL, [secCursolX]
-
-        ;MOV     AH, 0x0e
-        ;MOV     AL, DL
-        ;MOV     BX, 0x0000
-        ;INT     0x10
-        ;RET
-
-        MOV     DH, [secCursolY]
-        CALL    printHex
-        RET
+.preMsg:
+        DB      "L", "o", "a", "d", "i", "n", "g", " ", "m", "a", "s", "h", ".", ".", "."
 
 secHlt:
         JMP     secHlt
@@ -415,6 +409,17 @@ lbaToChs:
         DB      0x00
 .sector:                                ; セクタ番号
         DB      0x00
+
+; ビープ音出力
+; in : なし
+; out: ビープ音
+putBeep:
+        MOV     AH, 0x0e
+        MOV     AL, 0x41
+        MOV     BH, 0x00
+        MOV     BL, 0x01
+        INT     0x10
+        RET
 
 ; --- 0埋め ---
 secEnd:
