@@ -4,7 +4,7 @@
 ; ロゴ
 ; https://jp.mathworks.com/matlabcentral/fileexchange/181715-makebanner-big-ascii-style-comment-generator
 
-        ORG     0x0000
+        ORG     0x4000
         JMP     mashInit
 
 ; --- 定数 ---
@@ -59,6 +59,12 @@ sColorError:
 ; ██║██║ ╚███║██║   ██║   
 ; ╚═╝╚═╝  ╚══╝╚═╝   ╚═╝   
 mashInit:
+        MOV     AX, 0x0000              ; レジスタセット
+        MOV     DS, AX
+        MOV     SS, AX
+        MOV     ES, AX
+        MOV     SP, 0x3fff              ; ｾｸﾞﾎﾟ
+
         CALL    cmdVer                  ; ロゴ+版数表示
         
         JMP     mashLoop                ; ループ処理へ移行

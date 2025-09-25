@@ -205,16 +205,19 @@ secLoadShell:
         INT     0x10
         ADD BYTE[secCursolX], 0x0f
 
-        MOV     DX, 0x0005              ; LBA 5~20 の16セクタを 0x0000 に展開
+        MOV     DX, 0x0005              ; LBA 5~20 の16セクタを 0x0000:0x4000 に展開
         CALL    lbaToChs
+
+        MOV     AX, 0x0000
+        MOV     ES, AX
 
         MOV     AH, 0x02
         MOV     AL, 0x10
         MOV     DL, 0x00
-        MOV     BX, 0x0000
+        MOV     BX, 0x4000
         INT     0x13
 
-        JMP     0x0000                  ; 移動
+        JMP     0x0000:0x4000           ; 移動
 
         CALL    secHlt
 .preMsg:
