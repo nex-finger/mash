@@ -50,6 +50,8 @@ sColorNormal:
         DB      0x0f                    ; 表示色(初期値: 白)
 sColorError:
         DB      0x01                    ; 表示色(初期値: 赤?)
+sFreeMemSize:
+        DB      0x00, 0x00              ; mallocできる残りメモリ
 
 ; --- 初期化プログラム ---
 ; ██╗███╗  ██╗██╗████████╗
@@ -64,6 +66,8 @@ mashInit:
         MOV     SS, AX
         MOV     ES, AX
         MOV     SP, 0x3fff              ; ｾｸﾞﾎﾟ
+
+        CALL    rInitMalloc
 
         CALL    cmdVer                  ; ロゴ+版数表示
         
@@ -110,6 +114,23 @@ sysEcho:
         CALL    rPopReg                 ; レジスタ取得
         RET
 
+sysMalloc:
+        CALL    rPushReg                ; レジスタ退避
+        CALL    rPopReg                 ; レジスタ取得
+        RET
+
+sysFree:
+        CALL    rPushReg                ; レジスタ退避
+        CALL    rPopReg                 ; レジスタ取得
+        RET
+
+
+; malloc コマンド
+; 連続した指定容量の確保し先頭ポインタを返却する
+; in  : CX      確保したいメモリ容量(バイト)
+; out : AX      結果 0成功 1失敗
+;     : SS:BP   確保した先頭ポインタ(確保に成功した場合)
+
 ; --- サブルーチン --- subroutine
 ;  ██████╗██╗   ██╗██████╗      ██████╗  ██████╗ ██╗   ██╗████████╗██╗███╗  ██╗███████╗
 ; ██╔════╝██║   ██║██╔══██╗     ██╔══██╗██╔═══██╗██║   ██║╚══██╔══╝██║████╗ ██║██╔════╝
@@ -128,6 +149,33 @@ sysEcho:
 ;                   2: その他の失敗
 rPrint:
         CALL    rPushReg                ; レジスタ退避
+        CALL    rPopReg                 ; レジスタ取得
+        RET
+
+; malloc 用のアロケーションメモリとアロケーションテーブルを初期化
+; アロケーションメモリ 0x10000 ~ 0x1ffff
+; アロケーションテーブル 0x01000 ~ 0x01fff
+; in  : なし
+; out : なし
+rInitMalloc:
+        CALL    rPushReg                ; レジスタ退避
+
+        MOV WORD [sFreeMemSize], 0xffff ; 使用可能メモリを64kBに
+        MOV     AX, 0x0001
+        MOV     ES, AX
+        MOV     BP, 0x1000
+.initLoop:
+        MOV BYTE ES:BP, 0x00
+        INC     BP
+        CMP     BP, 0x2000
+        JNZ     .initLoop
+
+        MOV     AX, 0x0100              ; 適当にとってテスト
+        CALL    sysMalloc
+        CALL    sysFree
+        CMP WORD [sFreeMemSize], 0xffff
+        JNZ     mashHlt
+
         CALL    rPopReg                 ; レジスタ取得
         RET
 
