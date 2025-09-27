@@ -193,6 +193,7 @@ secDiskChk:
 .preMsg:                                ; "Disk test..."
         DB      "D", "i", "s", "k", " ", "t", "e", "s", "t", ".", ".", "."
 
+; --- mash展開 ---
 secLoadShell:
         MOV     AH, 0x13                ; 前表示
         MOV     AL, 0x01

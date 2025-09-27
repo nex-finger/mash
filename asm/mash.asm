@@ -67,6 +67,10 @@ mashInit:
         MOV     ES, AX
         MOV     SP, 0x3fff              ; ｾｸﾞﾎﾟ
 
+        MOV     AX, 0x0010              ; 256バイト
+        MOV     DI, 0x4000              ; 0x4000から
+        CALL    dbgDump
+
         CALL    rInitMalloc
 
         CALL    cmdVer                  ; ロゴ+版数表示
@@ -314,8 +318,9 @@ rPushReg:                               ; ??        ??      AX  ret
         PUSH    DI                      ; AX        ret     AX  DI)SI)DX)CX)BX)AX
         PUSH    BP                      ; AX        ret     AX  BP)DI)SI)DX)CX)BX)AX
 
-        MOV WORD    AX, [.retAddr]      ; AX        ret     ret BP)DI)SI)DX)CX)BX)AX
+        MOV WORD    AX, [.retAddr]      ; AX        ret     AX  BP)DI)SI)DX)CX)BX)AX
         PUSH    AX                      ; AX        ret     ret ret)BP)DI)SI)DX)CX)BX)AX
+        MOV     AX, [.tempAX]           ; AX        ret     AX  ret)BP)DI)SI)DX)CX)BX)AX
         RET                             ; AX        ret     ret BP)DI)SI)DX)CX)BX)AX
 .tempAX:                                ; AXレジスタを一時的に格納
         DB      0x00, 0x00
@@ -362,9 +367,92 @@ putBeep:
         INT     0x10
         RET
 
+; デバッグ用ダンプ
+; COM1を使って指定番地から指定バイトをダンプする
+; in  : AX      ダンプするバイト数
+;     : DS:DI   ダンプ開始アドレス
+; out : なし
+dbgDump:
+        CALL    rPushReg                ; レジスタ退避
+
+        MOV     BX, DS
+        MOV WORD [.focusSeg], BX
+        MOV WORD [.focusAddr], DI
+        MOV WORD [.byteCnt], AX
+
+        MOV     AH, 0x00                ; シリアルポート設定
+        MOV     AL, 0xe3                ; 0bBBBPPSCC, 9600bps, None, 1bit, 8bit
+        MOV     DX, 0x0000              ; 0ch = COM1, xch = COMx+1
+        INT     0x14
+
+        MOV     AL, 0x0a                ; 改行文字
+        CALL    .putchar
+
+        MOV     CX, 0x0000
+.dumpLoop:
+        PUSH    CX
+        MOV     BX, [.focusSeg]         ; asciiプリント
+        MOV     DS, BX
+        MOV     DI, [.focusAddr]
+        MOV     AL, [DS:DI]
+
+        PUSH    AX
+        SHR     AL, 0x04                ; 上4bitプリント
+        AND     AL, 0x0f
+        CMP     AL, 0x0a
+        JAE     .upperaf
+        ADD     AL, 0x30                ; 0~9
+        JMP     .upperNext
+.upperaf:
+        ADD     AL, 0x37                ; a~f
+.upperNext:
+        CALL    .putchar
+
+        POP     AX
+        AND     AL, 0x0f                ; 下4bitプリント
+        CMP     AL, 0x0a
+        JAE     .loweraf
+        ADD     AL, 0x30                ; 0~9
+        JMP     .lowerNext
+.loweraf:
+        ADD     AL, 0x37                ; a~f
+.lowerNext:
+        CALL    .putchar
+
+        MOV     AL, 0x20                ; 空白文字
+        CALL    .putchar
+
+        INC     DI
+        MOV WORD [.focusAddr], DI
+        POP     CX
+        INC     CX
+        CMP WORD CX, [.byteCnt]
+        JNZ     .dumpLoop
+
+        MOV     AL, 0x0a                ; 改行文字
+        CALL    .putchar
+
+        CALL    rPopReg                 ; レジスタ取得
+        RET
+.putchar:                               ; 1文字出力(ALreg)
+        PUSH    AX
+        PUSH    DX
+        MOV     AH, 0x01                ; 書き込み
+        MOV     DX, 0x0000
+        INT     0x14
+        POP     DX
+        POP     AX
+        RET
+.focusSeg:                              ; ダンプするセグメント
+        DB      0x00, 0x00
+.focusAddr:                             ; ダンプするアドレス
+        DB      0x00, 0x00
+.byteCnt:                               ; ダンプするバイト数
+        DB      0x00, 0x00
+
 mashHlt:
         JMP     mashHlt
 
 ; --- 0埋め ---
 secEnd:
-        times 0x4000-($-$$) DB 0          ; セカンダリローダは4セクタ
+        times 0x4000-($-$$) DB 0        ; mash常駐は16セクタ

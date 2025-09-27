@@ -65,6 +65,9 @@ iplErr:
 		INT		0x10
 		JMP		iplEnd
 
+iplConsole:
+		JMP		iplEnd
+
 ; --- ループ ---
 iplEnd:
 		JMP		iplEnd

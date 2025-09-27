@@ -307,3 +307,19 @@ S = (LBA % 18) + 1
 | DXreg: 16ビット値 | (画面に表示) |
 
 表示は6文字で 0x???? の形。
+
+#### 以下メモ
+
+アセンブルとディスク書き込み
+```sh
+C:\NASM\bin>nasm -f bin ../asm/ipl.asm -o ../bin/ipl.bin
+C:\NASM\bin>nasm -f bin ../asm/second.asm -o ../bin/second.bin
+C:\NASM\bin>nasm -f bin ../asm/mash.asm -o ../bin/mash.bin
+
+C:\NASM\bin>makedisk.exe mash.img
+```
+
+qemu起動(デバッグはCOM3)
+```sh
+C:\NASM\bin>qemu-system-i386 -fda mash.img -serial stdio
+```
