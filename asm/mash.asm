@@ -114,22 +114,95 @@ sysEcho:
         CALL    rPopReg                 ; レジスタ取得
         RET
 
-sysMalloc:
-        CALL    rPushReg                ; レジスタ退避
-        CALL    rPopReg                 ; レジスタ取得
-        RET
-
-sysFree:
-        CALL    rPushReg                ; レジスタ退避
-        CALL    rPopReg                 ; レジスタ取得
-        RET
-
-
 ; malloc コマンド
-; 連続した指定容量の確保し先頭ポインタを返却する
+; 指定されたバイト数の確保した先頭アドレスを返却する
+; 実際の確保は16バイト単位で行われる
+; 一度に確保できるのは 4080(255* 16)バイト まで
 ; in  : CX      確保したいメモリ容量(バイト)
 ; out : AX      結果 0成功 1失敗
 ;     : SS:BP   確保した先頭ポインタ(確保に成功した場合)
+sysMalloc:
+        CALL    rPushReg                ; レジスタ退避
+
+        CMP     CX, 0x0000              ; 0バイト確保ならなにもしない
+        JZ      .retError
+        CMP     CX, 0x0ff0
+        JA      .retError               ; 255*16 バイトより大きいならなにもしない
+        
+        MOV     AX, 0x0000
+        MOV     BX, 0x0000
+        MOV     SI, 0x1000
+.tblLoop:
+        MOV BYTE BL, [SI]
+        CMP     BL, 0x00
+        JNZ     .tblNext
+.fillChk:
+        INC     BH                      ; 連続確認数
+        MOV     DX, 0x0000              ; DX ← BH << 4
+        MOV     DL, BH
+        SHL     DX, 0x04
+        AND     DX, 0xfff0
+        CMP     DX, CX
+        JB      .exitCheck              ; まだ確保量が足りないなら続ける
+        MOV     BP, AX
+        MOV     CX, 0x0000
+.fiilLoop:
+        MOV     SI, 0x1000              ; SI ← 0x1000 + AX + CX
+        ADD     SI, AX
+        ADD     SI, CX
+        MOV     BL, 0x00
+        ADD     BL, BH
+        SUB     BL, CL                  ; BL ← BH - CL
+        MOV BYTE [SI], BL               ; sTbl[AX + CX]
+        INC     CL
+        CMP     CL, BH
+        JZ      .retSuccess             ; 成功終了
+        JMP     .fiilLoop
+.tblNext:
+        INC     SI
+        MOV     AX, SI
+        MOV     BH, 0x00
+.exitCheck:
+        CMP     SI, 0x1fff
+        JZ      .retError
+        JMP     .tblLoop
+.retSuccess:
+        SHL     AX, 0x04
+        AND     AX, 0xfff0
+        MOV WORD [.aRetAddr], AX
+        CALL    rPopReg                 ; レジスタ取得
+        MOV WORD BP, [.aRetAddr]
+        MOV     AX, 0x0000
+        RET
+.retError:                              ; 失敗時
+        CALL    rPopReg
+        MOV     AX, 0x0001
+        RET
+.aRetAddr:
+        DB      0x00, 0x00              ; 戻り値一時格納
+
+; free コマンド
+sysFree:
+        CALL    rPushReg                ; レジスタ退避
+
+        MOV     AX, 0x0000
+        MOV     DI, BP                  ; DI ← BP >> 4
+        SHR     DI, 0x04
+        ADD     DI, 0x0fff
+        MOV     CX, [DI]                ; CX ← sTbl[DI]
+.freeLoop:
+        MOV     SI, 0x1000              ; SI ← 0x1000 + DI + AX = sTbl[DI+AX]
+        ADD     SI, DI
+        ADD     SI, AX
+        MOV BYTE [SI], 0x00
+        INC     AX
+        CMP     AX, CX
+        JNZ     .freeLoop
+
+        CALL    rPopReg                 ; レジスタ取得
+        RET
+
+
 
 ; --- サブルーチン --- subroutine
 ;  ██████╗██╗   ██╗██████╗      ██████╗  ██████╗ ██╗   ██╗████████╗██╗███╗  ██╗███████╗
@@ -160,7 +233,7 @@ rPrint:
 rInitMalloc:
         CALL    rPushReg                ; レジスタ退避
 
-        MOV WORD [sFreeMemSize], 0xffff ; 使用可能メモリを64kBに
+        MOV WORD [sFreeMemSize], 0x1000 ; 使用可能メモリを64kBに
         MOV     AX, 0x0001
         MOV     ES, AX
         MOV     BP, 0x1000
@@ -170,7 +243,7 @@ rInitMalloc:
         CMP     BP, 0x2000
         JNZ     .initLoop
 
-        MOV     AX, 0x0100              ; 適当にとってテスト
+        MOV     CX, 0x0100              ; 適当にとってテスト
         CALL    sysMalloc
         CALL    sysFree
         CMP WORD [sFreeMemSize], 0xffff
