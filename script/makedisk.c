@@ -221,7 +221,7 @@ int out_file(char *inName, unsigned char *inBuf)
  */
 int main(int argc, char *argv[])
 {
-    char aOutFileName[PATHLEN];
+    char aOutFileName[PATHLEN*2];
     struct component config[COMPMAX];
     unsigned char aRaw[DISKSIZE];       /* セクタサイズ * セクタ数 */
     int aCnt;                           /* 何個のファイルを取り込むか */
