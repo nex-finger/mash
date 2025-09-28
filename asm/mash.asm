@@ -67,9 +67,13 @@ mashInit:
         MOV     ES, AX
         MOV     SP, 0x3fff              ; ｾｸﾞﾎﾟ
 
-        MOV     AX, 0x0010              ; 16バイト
-        MOV     DI, 0x3ff0              ; 0x3ff0から
+        PUSH    DS
+        MOV     AX, 0x0000
+        MOV     DS, AX
+        MOV     AX, 0x0010
+        MOV     DI, 0x3ff0
         CALL    dbgDump
+        POP     DS
 
         CALL    rInitMalloc
 
@@ -126,19 +130,30 @@ sysEcho:
 ; out : AX      結果 0成功 1失敗
 ;     : SS:BP   確保した先頭ポインタ(確保に成功した場合)
 sysMalloc:
-        RET
         CALL    rPushReg                ; レジスタ退避
+
+        ; debug ---> (2025/09/28 コメントを消してmお動くことまで確認)
+        ;MOV     AX, 0x0000
+        ;MOV     DS, AX
+        ;MOV     BX, 0x1002
+        ;MOV WORD [DS:BX], 0x1234
+
+        ;CALL    rPopReg                 ; レジスタ取得
+        ;RET
+        ; <--- debug
 
         CMP     CX, 0x0000              ; 0バイト確保ならなにもしない
         JZ      .retError
         CMP     CX, 0x0ff0
         JA      .retError               ; 255*16 バイトより大きいならなにもしない
         
+        PUSH    DS                      ; セグメント保存
         MOV     AX, 0x0000
+        MOV     DS, AX                  ; セグメント指定！
         MOV     BX, 0x0000
         MOV     SI, 0x1000
 .tblLoop:
-        MOV BYTE BL, [SI]
+        MOV BYTE BL, [DS:SI]
         CMP     BL, 0x00
         JNZ     .tblNext
 .fillChk:
@@ -158,7 +173,7 @@ sysMalloc:
         MOV     BL, 0x00
         ADD     BL, BH
         SUB     BL, CL                  ; BL ← BH - CL
-        MOV BYTE [SI], BL               ; sTbl[AX + CX]
+        MOV BYTE [DS:SI], BL               ; sTbl[AX + CX]
         INC     CL
         CMP     CL, BH
         JZ      .retSuccess             ; 成功終了
@@ -195,15 +210,20 @@ sysFree:
         SHR     DI, 0x04
         ADD     DI, 0x0fff
         MOV     CX, [DI]                ; CX ← sTbl[DI]
+
+        ;PUSH    DS
+        ;MOV     BX, 0x1000
+        ;MOV     DS, BX
 .freeLoop:
         MOV     SI, 0x1000              ; SI ← 0x1000 + DI + AX = sTbl[DI+AX]
         ADD     SI, DI
         ADD     SI, AX
-        MOV BYTE [SI], 0x00
+        MOV BYTE [DS:SI], 0x00
         INC     AX
         CMP     AX, CX
         JNZ     .freeLoop
 
+        POP     DS                      ; セグメント戻す
         CALL    rPopReg                 ; レジスタ取得
         RET
 
@@ -236,51 +256,61 @@ rPrint:
 ; in  : なし
 ; out : なし
 rInitMalloc:
-        RET
         CALL    rPushReg                ; レジスタ退避
 
-        ; debug --->
-        MOV     AX, 0x0010
-        MOV     DI, 0x1000
-        CALL    dbgDump
-        ; <--- debug
-
         MOV WORD [sFreeMemSize], 0x1000 ; 使用可能メモリを64kBに
-        MOV     AX, 0x0001
+        MOV     AX, ES
+        PUSH    AX
+        MOV     AX, 0x0000
         MOV     ES, AX
         MOV     BP, 0x1000
 .initLoop:
-        MOV BYTE ES:BP, 0x00
+        MOV BYTE [ES:BP], 0x00
         INC     BP
         CMP     BP, 0x2000
         JNZ     .initLoop
 
+        POP     AX
+        MOV     ES, AX
+
         ; debug --->
+        PUSH    DS
+        MOV     AX, 0x0000
+        MOV     DS, AX
         MOV     AX, 0x0010
         MOV     DI, 0x1000
         CALL    dbgDump
+        POP     DS
         ; <--- debug
 
         MOV     CX, 0x0020              ; 適当にとってテスト
         CALL    sysMalloc
 
         ; debug --->
+        PUSH    DS
+        MOV     AX, 0x0000
+        MOV     DS, AX
         MOV     AX, 0x0010
         MOV     DI, 0x1000
         CALL    dbgDump
+        POP     DS
 
         CALL    rPopReg                 ; レジスタ取得
         RET
         ; <--- debug
 
-        CALL    sysFree
-        CMP WORD [sFreeMemSize], 0xffff
+        ;CALL    sysFree
+        ;CMP WORD [sFreeMemSize], 0xffff
         ;JNZ     mashHlt
 
         ; debug --->
+        PUSH    DS
+        MOV     AX, 0x1000
+        MOV     DS, AX
         MOV     AX, 0x0010
         MOV     DI, 0x1000
         CALL    dbgDump
+        POP     DS
         ; <--- debug
 
         CALL    rPopReg                 ; レジスタ取得
@@ -292,6 +322,8 @@ rInitMalloc:
 ; out : なし
 cmdVer:
         CALL    rPushReg                ; レジスタ退避
+        MOV     AX, 0x0000
+        MOV     SS, AX
         MOV     BP, cMashLogo           ; ロゴの表示
         MOV     CX, 0x0000
 .loophead:
