@@ -322,4 +322,8 @@ C:\NASM\bin>makedisk.exe mash.img
 qemu起動(デバッグはCOM3)
 ```sh
 C:\NASM\bin>qemu-system-i386 -fda mash.img -serial stdio
+C:\NASM\script>"C:\Program Files\qemu\qemu-system-i386" -fda ../bin/mash.img -serial stdio
 ```
+
+メモリダンプができない！
+- 送信先で teraterm なんなりを起動する必要がある

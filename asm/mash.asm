@@ -67,8 +67,8 @@ mashInit:
         MOV     ES, AX
         MOV     SP, 0x3fff              ; ｾｸﾞﾎﾟ
 
-        MOV     AX, 0x0010              ; 256バイト
-        MOV     DI, 0x4000              ; 0x4000から
+        MOV     AX, 0x0010              ; 16バイト
+        MOV     DI, 0x3ff0              ; 0x3ff0から
         CALL    dbgDump
 
         CALL    rInitMalloc
@@ -126,6 +126,7 @@ sysEcho:
 ; out : AX      結果 0成功 1失敗
 ;     : SS:BP   確保した先頭ポインタ(確保に成功した場合)
 sysMalloc:
+        RET
         CALL    rPushReg                ; レジスタ退避
 
         CMP     CX, 0x0000              ; 0バイト確保ならなにもしない
@@ -235,7 +236,14 @@ rPrint:
 ; in  : なし
 ; out : なし
 rInitMalloc:
+        RET
         CALL    rPushReg                ; レジスタ退避
+
+        ; debug --->
+        MOV     AX, 0x0010
+        MOV     DI, 0x1000
+        CALL    dbgDump
+        ; <--- debug
 
         MOV WORD [sFreeMemSize], 0x1000 ; 使用可能メモリを64kBに
         MOV     AX, 0x0001
@@ -247,11 +255,33 @@ rInitMalloc:
         CMP     BP, 0x2000
         JNZ     .initLoop
 
-        MOV     CX, 0x0100              ; 適当にとってテスト
+        ; debug --->
+        MOV     AX, 0x0010
+        MOV     DI, 0x1000
+        CALL    dbgDump
+        ; <--- debug
+
+        MOV     CX, 0x0020              ; 適当にとってテスト
         CALL    sysMalloc
+
+        ; debug --->
+        MOV     AX, 0x0010
+        MOV     DI, 0x1000
+        CALL    dbgDump
+
+        CALL    rPopReg                 ; レジスタ取得
+        RET
+        ; <--- debug
+
         CALL    sysFree
         CMP WORD [sFreeMemSize], 0xffff
-        JNZ     mashHlt
+        ;JNZ     mashHlt
+
+        ; debug --->
+        MOV     AX, 0x0010
+        MOV     DI, 0x1000
+        CALL    dbgDump
+        ; <--- debug
 
         CALL    rPopReg                 ; レジスタ取得
         RET
@@ -456,3 +486,10 @@ mashHlt:
 ; --- 0埋め ---
 secEnd:
         times 0x4000-($-$$) DB 0        ; mash常駐は16セクタ
+
+; --- メモ ---
+;
+;       メモリダンプフォーマット
+;        MOV     AX, 0x0010              ; 256バイト
+;        MOV     DI, 0x4000              ; 0x4000から
+;        CALL    dbgDump
