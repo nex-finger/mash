@@ -67,16 +67,22 @@ mashInit:
         MOV     ES, AX
         MOV     SP, 0x3fff              ; ｾｸﾞﾎﾟ
 
-        PUSH    DS
-        MOV     AX, 0x0000
-        MOV     DS, AX
-        MOV     AX, 0x0010
-        MOV     DI, 0x3ff0
-        CALL    dbgDump
-        POP     DS
+        ;PUSH    DS
+        ;MOV     AX, 0x0000
+        ;MOV     DS, AX
+        ;MOV     AX, 0x0010
+        ;MOV     DI, 0x3ff0
+        ;CALL    dbgDump
+        ;POP     DS
 
         CALL    rInitMalloc
 
+        ; debug ---->
+        MOV     AX, 0x0000
+        MOV     DS, AX
+        MOV     SS, AX
+        MOV     ES, AX
+        ; <---- debug
         CALL    cmdVer                  ; ロゴ+版数表示
         
         JMP     mashLoop                ; ループ処理へ移行
@@ -126,80 +132,164 @@ sysEcho:
 ; 指定されたバイト数の確保した先頭アドレスを返却する
 ; 実際の確保は16バイト単位で行われる
 ; 一度に確保できるのは 4080(255* 16)バイト まで
+;
+; アロケーションメモリ: 0x1000:0x0000 ~ 0x1000:0xffff
+; アロケーションテーブル: 0x0000:0x1000 ~ 0x0000:0x1fff
+; 
+; sysMalloc -> .mallocLoop / .return
+; .mallocLoop -> .exitChk / .cntChk
+; .exitChk -> .return / .mallocLoop
+; .cntChk -> .exitChk / .fillTbl
+; .fillTbl -> .fillLoop
+; .fillLoop -> .fillLoop / .return
+; .return -> RET
+;
 ; in  : CX      確保したいメモリ容量(バイト)
 ; out : AX      結果 0成功 1失敗
 ;     : SS:BP   確保した先頭ポインタ(確保に成功した場合)
 sysMalloc:
         CALL    rPushReg                ; レジスタ退避
-
-        ; debug ---> (2025/09/28 コメントを消してmお動くことまで確認)
-        ;MOV     AX, 0x0000
-        ;MOV     DS, AX
-        ;MOV     BX, 0x1002
-        ;MOV WORD [DS:BX], 0x1234
-
-        ;CALL    rPopReg                 ; レジスタ取得
-        ;RET
-        ; <--- debug
-
-        CMP     CX, 0x0000              ; 0バイト確保ならなにもしない
+        PUSH    DS                      ; セグメント退避
+        CMP     CX, 0x1000              ; 確保メモリ上限チェック
+        JAE     .retError
+        CMP     CX, 0x0000              ; 0バイトかチェック
         JZ      .retError
-        CMP     CX, 0x0ff0
-        JA      .retError               ; 255*16 バイトより大きいならなにもしない
-        
-        PUSH    DS                      ; セグメント保存
-        MOV     AX, 0x0000
-        MOV     DS, AX                  ; セグメント指定！
-        MOV     BX, 0x0000
-        MOV     SI, 0x1000
-.tblLoop:
-        MOV BYTE BL, [DS:SI]
-        CMP     BL, 0x00
-        JNZ     .tblNext
-.fillChk:
-        INC     BH                      ; 連続確認数
-        MOV     DX, 0x0000              ; DX ← BH << 4
-        MOV     DL, BH
-        SHL     DX, 0x04
-        AND     DX, 0xfff0
-        CMP     DX, CX
-        JB      .exitCheck              ; まだ確保量が足りないなら続ける
-        MOV     BP, AX
-        MOV     CX, 0x0000
-.fiilLoop:
-        MOV     SI, 0x1000              ; SI ← 0x1000 + AX + CX
-        ADD     SI, AX
-        ADD     SI, CX
-        MOV     BL, 0x00
-        ADD     BL, BH
-        SUB     BL, CL                  ; BL ← BH - CL
-        MOV BYTE [DS:SI], BL               ; sTbl[AX + CX]
-        INC     CL
-        CMP     CL, BH
-        JZ      .retSuccess             ; 成功終了
-        JMP     .fiilLoop
-.tblNext:
-        INC     SI
-        MOV     AX, SI
-        MOV     BH, 0x00
-.exitCheck:
-        CMP     SI, 0x1fff
-        JZ      .retError
-        JMP     .tblLoop
-.retSuccess:
-        SHL     AX, 0x04
-        AND     AX, 0xfff0
-        MOV WORD [.aRetAddr], AX
+        ADD     CX, 0x000f              ; 確保するブロック数(1ブロック16バイト) = (確保したいバイト + 15) /16
+        SHR     CX, 0x04
+        MOV BYTE [.aSize], CL
+        MOV     AX, 0x0000              ; テーブルのセグメントは 0 、以後ルーチン脱出直前まで0のまま
+        MOV     DS, AX
+        MOV WORD [.aFAdr], 0x1000       ; テーブルの先頭ポインタは 0x1000
+        MOV BYTE [.aCnt], 0x00
+        MOV WORD [.aRet], 0x1000
+.mallocLoop:
+        MOV WORD DI, [.aFAdr]           ; シークしている番地が0か確認
+        MOV BYTE AH, [DS:DI]
+        CMP     AH, 0x00
+        JZ      .cntChk
+        MOV BYTE [.aSize], 0x00         ; シーク番地が0ではないので連続数をリセット
+        MOV WORD AX, [.aFAdr]           ; アロケーションテーブルをシーク
+        INC     AX
+        MOV WORD [.aFAdr], AX
+        MOV WORD [.aRet], AX            ; シーク以前には確保できる領域がないため次へ
+.exitChk:
+        MOV WORD AX, [.aFAdr]           ; テーブルの末尾まで行ったらもう見込みなし
+        CMP     AX, 0x2000              ; 末尾は 0x1fff
+        JNZ     .mallocLoop                ; 末尾ではないなら次の1バイトを
+.retError:
+        MOV WORD [.aRet], 0xffff        ; とりあえずゴミデータ
+.return:
         CALL    rPopReg                 ; レジスタ取得
-        MOV WORD BP, [.aRetAddr]
-        MOV     AX, 0x0000
-        RET
-.retError:                              ; 失敗時
-        CALL    rPopReg
-        MOV     AX, 0x0001
-        RET
-.aRetAddr:
-        DB      0x00, 0x00              ; 戻り値一時格納
+        MOV WORD BP, [.aRet]            ; 取得した先頭アドレスを格納
+        POP     DS                      ; mallocをコールする前のセグメントに戻す
+        RET                             ; 呼び出し元へ
+.cntChk:
+        MOV BYTE AH, [.aCnt]            ; 連続空きブロックカウントをカウントアップ
+        INC     AH                      ; AHには連続空きブロック
+        MOV BYTE [.aCnt], AH
+        MOV BYTE AL, [.aSize]           ; 連続空きブロックで注文した領域を充足するか？
+        CMP     AH, AL                  ; ALには注文されたブロック数(AHには連続空きブロック)
+        JZ      .fillTbl
+        MOV WORD AX, [.aFAdr]           ; まだ充足しないため検索を続ける(連続空きブロックは継続)
+        INC     AX
+        MOV WORD [.aFAdr], AX
+        JMP     .exitChk                ; 末尾チェックへ
+.fillTbl:
+        MOV WORD AX, [.aFAdr]           ; 連続空きブロックの先頭アドレスを取得
+        MOV     DI, AX                  ; 以後空きブロックのアドレスは DI にて参照
+        MOV BYTE AH, [.aCnt]            ; 以後注文されたブロック数は AH にて参照
+.fillLoop:
+        MOV BYTE [DS:DI], AH            ; free用に意味のある値を格納
+        DEC     AH                      ; aCnt--
+        INC     DI                      ; aFAdr++
+        CMP     AH, 0x00                ; 注文されたブロック数だけ書き込んだら終了
+        JNZ     .fillLoop
+        MOV WORD AX, [.aRet]            ; 呼び出し元に返却するのは (連続空きブロックの先頭アドレス - 0X10000) * 16
+        SUB     AX, 0x1000
+        SHL     AX, 0x04
+        MOV WORD [.aRet], AX
+        JMP     .return        
+.aFAdr:                                 ; テーブル内シークアドレス
+        DB      0x00, 0x00
+.aCnt:                                  ; 現時点の連続空きブロック
+        DB      0x00
+.aSize:                                 ; 検索するべき連続空きブロック
+        DB      0x00
+.aRet:                                  ; 返却するアロケーションメモリアドレス
+        DB      0x00, 0x00
+
+; コメントアウト(2025/09/28時点の欠陥malloc
+;sysMalloc:
+;        CALL    rPushReg                ; レジスタ退避
+;
+;        ; debug ---> (2025/09/28 コメントを消しても動くことまで確認)
+;        MOV     AX, 0x0000
+;        MOV     DS, AX
+;        MOV     BX, 0x1002
+;        MOV WORD [DS:BX], 0x1234
+;
+;        CALL    rPopReg                 ; レジスタ取得
+;        RET
+;        ; <--- debug
+;
+;        CMP     CX, 0x0000              ; 0バイト確保ならなにもしない
+;        JZ      .retError
+;        CMP     CX, 0x0ff0
+;        JA      .retError               ; 255*16 バイトより大きいならなにもしない
+;        
+;        PUSH    DS                      ; セグメント保存
+;        MOV     AX, 0x0000
+;        MOV     DS, AX                  ; セグメント指定！
+;        MOV     BX, 0x0000
+;        MOV     SI, 0x1000
+;.tblLoop:
+;        MOV BYTE BL, [DS:SI]
+;        CMP     BL, 0x00
+;        JNZ     .tblNext
+;.fillChk:
+;        INC     BH                      ; 連続確認数
+;        MOV     DX, 0x0000              ; DX ← BH << 4
+;        MOV     DL, BH
+;        SHL     DX, 0x04
+;        AND     DX, 0xfff0
+;        CMP     DX, CX
+;        JB      .exitCheck              ; まだ確保量が足りないなら続ける
+;        MOV     BP, AX
+;        MOV     CX, 0x0000
+;.fiilLoop:
+;        MOV     SI, 0x1000              ; SI ← 0x1000 + AX + CX
+;        ADD     SI, AX
+;        ADD     SI, CX
+;        MOV     BL, 0x00
+;        ADD     BL, BH
+;        SUB     BL, CL                  ; BL ← BH - CL
+;        MOV BYTE [DS:SI], BL               ; sTbl[AX + CX]
+;        INC     CL
+;        CMP     CL, BH
+;        JZ      .retSuccess             ; 成功終了
+;        JMP     .fiilLoop
+;.tblNext:
+;        INC     SI
+;        MOV     AX, SI
+;        MOV     BH, 0x00
+;.exitCheck:
+;        CMP     SI, 0x1fff
+;        JZ      .retError
+;        JMP     .tblLoop
+;.retSuccess:
+;        SHL     AX, 0x04
+;        AND     AX, 0xfff0
+;        MOV WORD [.aRetAddr], AX
+;        CALL    rPopReg                 ; レジスタ取得
+;        MOV WORD BP, [.aRetAddr]
+;        MOV     AX, 0x0000
+;        RET
+;.retError:                              ; 失敗時
+;        CALL    rPopReg
+;        MOV     AX, 0x0001
+;        RET
+;.aRetAddr:
+;        DB      0x00, 0x00              ; 戻り値一時格納
 
 ; free コマンド
 sysFree:
@@ -274,11 +364,21 @@ rInitMalloc:
         MOV     ES, AX
 
         ; debug --->
+        ; アロケーションテーブル
         PUSH    DS
         MOV     AX, 0x0000
         MOV     DS, AX
         MOV     AX, 0x0010
         MOV     DI, 0x1000
+        CALL    dbgDump
+        POP     DS
+
+        ; スタック
+        PUSH    DS
+        MOV     AX, 0x0000
+        MOV     DS, AX
+        MOV     AX, 0x0040
+        MOV     DI, 0x3fc0
         CALL    dbgDump
         POP     DS
         ; <--- debug
@@ -287,11 +387,21 @@ rInitMalloc:
         CALL    sysMalloc
 
         ; debug --->
+        ; アロケーションテーブル
         PUSH    DS
         MOV     AX, 0x0000
         MOV     DS, AX
         MOV     AX, 0x0010
         MOV     DI, 0x1000
+        CALL    dbgDump
+        POP     DS
+
+        ; スタック
+        PUSH    DS
+        MOV     AX, 0x0000
+        MOV     DS, AX
+        MOV     AX, 0x0040
+        MOV     DI, 0x3fc0
         CALL    dbgDump
         POP     DS
 
@@ -331,16 +441,16 @@ cmdVer:
         MOV     AH, 0x13
         MOV     AL, 0x01
         MOV     BH, 0
-        MOV     BL, [sColorNormal]
+        MOV     BL, [DS:sColorNormal]
         MOV     CX, 35                  ; 1行35文字
-        MOV     DH, [sYpos]
-        MOV     DL, [sXpos]
+        MOV     DH, [DS:sYpos]
+        MOV     DL, [DS:sXpos]
         INT     0x10
 
         ADD     BP, 35                  ; 1行35文字
         POP     CX                      ; ループ変数取得
-        MOV BYTE [sXpos], 0x00
-        INC BYTE [sYpos]
+        MOV BYTE [DS:sXpos], 0x00
+        INC BYTE [DS:sYpos]
         INC     CX
         CMP     CX, 0x0006
         JNZ     .loophead    
@@ -349,13 +459,13 @@ cmdVer:
         MOV     AH, 0x13                ; 版数の表示
         MOV     AL, 0x01
         MOV     BH, 0
-        MOV     BL, [sColorNormal]
-        MOV     CX, [cVersionLen]
-        MOV     DH, [sYpos]
-        MOV     DL, [sXpos]
+        MOV     BL, [DS:sColorNormal]
+        MOV     CX, [DS:cVersionLen]
+        MOV     DH, [DS:sYpos]
+        MOV     DL, [DS:sXpos]
         INT     0x10
-        MOV BYTE [sXpos], 0x00
-        INC BYTE [sYpos]
+        MOV BYTE [DS:sXpos], 0x00
+        INC BYTE [DS:sYpos]
         CALL    rPopReg                 ; レジスタ取得
         RET
         
