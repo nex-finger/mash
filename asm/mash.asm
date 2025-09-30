@@ -135,14 +135,6 @@ sysEcho:
 ;
 ; アロケーションメモリ: 0x1000:0x0000 ~ 0x1000:0xffff
 ; アロケーションテーブル: 0x0000:0x1000 ~ 0x0000:0x1fff
-; 
-; sysMalloc -> .mallocLoop / .return
-; .mallocLoop -> .exitChk / .cntChk
-; .exitChk -> .return / .mallocLoop
-; .cntChk -> .exitChk / .fillTbl
-; .fillTbl -> .fillLoop
-; .fillLoop -> .fillLoop / .return
-; .return -> RET
 ;
 ; in  : CX      確保したいメモリ容量(バイト)
 ; out : AX      結果 0成功 1失敗
@@ -175,14 +167,8 @@ sysMalloc:
 .exitChk:
         MOV WORD AX, [.aFAdr]           ; テーブルの末尾まで行ったらもう見込みなし
         CMP     AX, 0x2000              ; 末尾は 0x1fff
-        JNZ     .mallocLoop                ; 末尾ではないなら次の1バイトを
-.retError:
-        MOV WORD [.aRet], 0xffff        ; とりあえずゴミデータ
-.return:
-        CALL    rPopReg                 ; レジスタ取得
-        MOV WORD BP, [.aRet]            ; 取得した先頭アドレスを格納
-        POP     DS                      ; mallocをコールする前のセグメントに戻す
-        RET                             ; 呼び出し元へ
+        JNZ     .mallocLoop             ; 末尾ではないなら次の1バイトを
+        JMP     .retError
 .cntChk:
         MOV BYTE AH, [.aCnt]            ; 連続空きブロックカウントをカウントアップ
         INC     AH                      ; AHには連続空きブロック
@@ -198,17 +184,24 @@ sysMalloc:
         MOV WORD AX, [.aFAdr]           ; 連続空きブロックの先頭アドレスを取得
         MOV     DI, AX                  ; 以後空きブロックのアドレスは DI にて参照
         MOV BYTE AH, [.aCnt]            ; 以後注文されたブロック数は AH にて参照
+        MOV     CL, 0x00
 .fillLoop:
-        MOV BYTE [DS:DI], AH            ; free用に意味のある値を格納
-        DEC     AH                      ; aCnt--
-        INC     DI                      ; aFAdr++
-        CMP     AH, 0x00                ; 注文されたブロック数だけ書き込んだら終了
+        INC     CL                      ; aCnt++
+        MOV BYTE [DS:DI], CL            ; free用に意味のある値を格納
+        DEC     DI                      ; aFAdr--
+        CMP     AH, CL                  ; 注文されたブロック数だけ書き込んだら終了
         JNZ     .fillLoop
         MOV WORD AX, [.aRet]            ; 呼び出し元に返却するのは (連続空きブロックの先頭アドレス - 0X10000) * 16
         SUB     AX, 0x1000
         SHL     AX, 0x04
         MOV WORD [.aRet], AX
-        JMP     .return        
+.retError:
+        MOV WORD [.aRet], 0xffff        ; とりあえずゴミデータ
+.return:
+        CALL    rPopReg                 ; レジスタ取得
+        MOV WORD BP, [.aRet]            ; 取得した先頭アドレスを格納
+        POP     DS                      ; mallocをコールする前のセグメントに戻す
+        RET                             ; 呼び出し元へ     
 .aFAdr:                                 ; テーブル内シークアドレス
         DB      0x00, 0x00
 .aCnt:                                  ; 現時点の連続空きブロック
@@ -362,6 +355,32 @@ rInitMalloc:
 
         POP     AX
         MOV     ES, AX
+
+        ; debug --->
+        ; アロケーションテーブル
+        PUSH    DS
+        MOV     AX, 0x0000
+        MOV     DS, AX
+        MOV     AX, 0x0010
+        MOV     DI, 0x1000
+        CALL    dbgDump
+        POP     DS
+
+        ; スタック
+        PUSH    DS
+        MOV     AX, 0x0000
+        MOV     DS, AX
+        MOV     AX, 0x0040
+        MOV     DI, 0x3fc0
+        CALL    dbgDump
+        POP     DS
+        ; <--- debug
+
+        MOV     CX, 0x0018              ; 適当にとってテスト
+        CALL    sysMalloc
+
+        MOV     CX, 0x0010              ; 適当にとってテスト
+        CALL    sysMalloc
 
         ; debug --->
         ; アロケーションテーブル
