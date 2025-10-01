@@ -303,26 +303,43 @@ sysMalloc:
 ;        DB      0x00, 0x00              ; 戻り値一時格納
 
 ; free コマンド
+; 指定されたアドレスを含む確保領域を解放する
+; 実際の確保は16バイト単位で行われる
+;
+; アロケーションメモリ: 0x1000:0x0000 ~ 0x1000:0xffff
+; アロケーションテーブル: 0x0000:0x1000 ~ 0x0000:0x1fff
+;
+; in  : BP      解放したいアドレス(確保した領域内ならどこでも)
+; out : AX      結果 0成功 1失敗
 sysFree:
         CALL    rPushReg                ; レジスタ退避
+        PUSH    DS                      ; セグメント退避
+        MOV     DI, BP                  ; DI ← (BP / 16) + 0x1000
 
         MOV     AX, 0x0000
-        MOV     DI, BP                  ; DI ← BP >> 4
+        MOV     DS, AX
         SHR     DI, 0x04
-        ADD     DI, 0x0fff
-        MOV     CX, [DI]                ; CX ← sTbl[DI]
-
-        ;PUSH    DS
-        ;MOV     BX, 0x1000
-        ;MOV     DS, BX
+        ADD     DI, 0x1000
+.setLoop:                               ; 確保した先頭まで戻る
+        MOV     AH, [DS:DI]             ; sTbl[DI]
+        DEC     DI
+        MOV     AL, [DS:DI]             ; sTbl[DI-1]
+        INC     DI
+        CMP     AL, 0x00                ; 値が 0x00 か、ひとつ先より小さければもう先頭
+        JMP     .freeLoop
+        CMP     AH, AL
+        JAE     .freeLoop               ; sTbl[DI] >= sTbl[DI-1] ならもう先頭
+        DEC     DI
+        JMP     .setLoop                ; sTbl[DI] < sTbl[DI-1] ならもうひとつ
 .freeLoop:
-        MOV     SI, 0x1000              ; SI ← 0x1000 + DI + AX = sTbl[DI+AX]
-        ADD     SI, DI
-        ADD     SI, AX
-        MOV BYTE [DS:SI], 0x00
-        INC     AX
-        CMP     AX, CX
+        MOV     AH, [DS:DI]
+        CMP     AH, 0x01
+        JZ      .lastFill
+        MOV BYTE AH, [DS:DI]
+        INC     DI
         JNZ     .freeLoop
+.lastFill:
+        MOV BYTE AH, [DS:DI]
 
         POP     DS                      ; セグメント戻す
         CALL    rPopReg                 ; レジスタ取得
@@ -376,45 +393,75 @@ rInitMalloc:
 
         ; debug --->
         ; アロケーションテーブル
-                ;PUSH    DS
-                ;MOV     AX, 0x0000
-                ;MOV     DS, AX
-                ;MOV     AX, 0x0200
-                ;MOV     DI, 0x1000
-                ;CALL    dbgDump
-                ;POP     DS
+                PUSH    DS
+                MOV     AX, 0x0000
+                MOV     DS, AX
+                MOV     AX, 0x0200
+                MOV     DI, 0x1000
+                CALL    dbgDump
+                POP     DS
 
                 ; スタック
-                ;PUSH    DS
-                ;MOV     AX, 0x0000
-                ;MOV     DS, AX
-                ;MOV     AX, 0x0040
-                ;MOV     DI, 0x3fc0
-                ;CALL    dbgDump
-                ;POP     DS
+                PUSH    DS
+                MOV     AX, 0x0000
+                MOV     DS, AX
+                MOV     AX, 0x0040
+                MOV     DI, 0x3fc0
+                CALL    dbgDump
+                POP     DS
         ; <--- debug
 
-        MOV     CX, 0x0030              ; 適当にとってテスト
+        MOV     CX, 0x0050              ; 適当にとってテスト
         CALL    sysMalloc
 
-        MOV     CX, 0x0031              ; 適当にとってテスト
+        MOV     CX, 0x0060              ; 適当にとってテスト
         CALL    sysMalloc
+        PUSH    BP                      ; とっとく
 
-        MOV     CX, 0x0001              ; 適当にとってテスト
+        MOV     CX, 0x0070              ; 適当にとってテスト
         CALL    sysMalloc
-
-        ;CALL    sysFree
-        ;CMP WORD [sFreeMemSize], 0xffff
-        ;JNZ     mashHlt
 
         ; debug --->
-        PUSH    DS
-        MOV     AX, 0x1000
-        MOV     DS, AX
-        MOV     AX, 0x0010
-        MOV     DI, 0x1000
-        CALL    dbgDump
-        POP     DS
+        ; アロケーションテーブル
+                PUSH    DS
+                MOV     AX, 0x0000
+                MOV     DS, AX
+                MOV     AX, 0x0200
+                MOV     DI, 0x1000
+                CALL    dbgDump
+                POP     DS
+
+        ; スタック
+                PUSH    DS
+                MOV     AX, 0x0000
+                MOV     DS, AX
+                MOV     AX, 0x0040
+                MOV     DI, 0x3fc0
+                CALL    dbgDump
+                POP     DS
+        ; <--- debug
+
+        POP     BP
+        CALL    sysFree
+
+        ; debug --->
+        ; アロケーションテーブル
+                PUSH    DS
+                MOV     AX, 0x0000
+                MOV     DS, AX
+                MOV     AX, 0x0200
+                MOV     DI, 0x1000
+                CALL    dbgDump
+                POP     DS
+
+        ; スタック
+                PUSH    DS
+                MOV     AX, 0x0000
+                MOV     DS, AX
+                MOV     AX, 0x0040
+                MOV     DI, 0x3fc0
+                CALL    dbgDump
+                POP     DS
         ; <--- debug
 
         CALL    rPopReg                 ; レジスタ取得
