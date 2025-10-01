@@ -159,18 +159,8 @@ sysMalloc:
         CALL    rPushReg                ; レジスタ退避
         PUSH    DS                      ; セグメント退避
 
-        ; debug ---->
-        MOV     AX, 0x0000
+        MOV     AX, 0x0000              ; テーブルのセグメントは 0 、以後ルーチン脱出直前まで0のまま
         MOV     DS, AX
-        MOV     ES, AX
-        MOV     SS, AX
-
-        MOV WORD [.aFAdr], 0x0000
-        MOV BYTE [.aCnt], 0x00
-        MOV BYTE [.aSize], 0x00
-        MOV WORD [.aRet], 0x0000
-        ; <---- debug
-
         CMP     CX, 0x1000              ; 確保メモリ上限チェック
         JAE     .retError
         CMP     CX, 0x0000              ; 0バイトかチェック
@@ -178,8 +168,6 @@ sysMalloc:
         ADD     CX, 0x000f              ; 確保するブロック数(1ブロック16バイト) = (確保したいバイト + 15) /16
         SHR     CX, 0x04
         MOV BYTE [.aSize], CL
-        MOV     AX, 0x0000              ; テーブルのセグメントは 0 、以後ルーチン脱出直前まで0のまま
-        MOV     DS, AX
         MOV WORD [.aFAdr], 0x1000       ; テーブルの先頭ポインタは 0x1000
         MOV BYTE [.aCnt], 0x00
         MOV WORD [.aRet], 0x1000
@@ -199,11 +187,11 @@ sysMalloc:
         JNZ     .mallocLoop             ; 末尾ではないなら次の1バイトを
         JMP     .retError
 .cntChk:
-        MOV BYTE AH, [.aCnt]            ; 連続空きブロックカウントをカウントアップ
-        INC     AH                      ; AHには連続空きブロック
-        MOV BYTE [.aCnt], AH
-        MOV BYTE AL, [.aSize]           ; 連続空きブロックで注文した領域を充足するか？
-        CMP     AH, AL                  ; ALには注文されたブロック数(AHには連続空きブロック)
+        MOV BYTE BH, [.aCnt]            ; 連続空きブロックカウントをカウントアップ
+        INC     BH                      ; AHには連続空きブロック
+        MOV BYTE [.aCnt], BH
+        MOV BYTE CH, [.aSize]           ; 連続空きブロックで注文した領域を充足するか？
+        CMP     BH, CH                  ; ALには注文されたブロック数(AHには連続空きブロック)
         JZ      .fillTbl
         MOV WORD AX, [.aFAdr]           ; まだ充足しないため検索を続ける(連続空きブロックは継続)
         INC     AX
@@ -388,107 +376,32 @@ rInitMalloc:
 
         ; debug --->
         ; アロケーションテーブル
-        PUSH    DS
-        MOV     AX, 0x0000
-        MOV     DS, AX
-        MOV     AX, 0x0200
-        MOV     DI, 0x1000
-        CALL    dbgDump
-        POP     DS
+                ;PUSH    DS
+                ;MOV     AX, 0x0000
+                ;MOV     DS, AX
+                ;MOV     AX, 0x0200
+                ;MOV     DI, 0x1000
+                ;CALL    dbgDump
+                ;POP     DS
 
-        ; スタック
-        PUSH    DS
-        MOV     AX, 0x0000
-        MOV     DS, AX
-        MOV     AX, 0x0040
-        MOV     DI, 0x3fc0
-        CALL    dbgDump
-        POP     DS
+                ; スタック
+                ;PUSH    DS
+                ;MOV     AX, 0x0000
+                ;MOV     DS, AX
+                ;MOV     AX, 0x0040
+                ;MOV     DI, 0x3fc0
+                ;CALL    dbgDump
+                ;POP     DS
         ; <--- debug
 
-        MOV     CX, 0x0018              ; 適当にとってテスト
+        MOV     CX, 0x0030              ; 適当にとってテスト
         CALL    sysMalloc
-        PUSH    BP
-        PUSH    BP
-        PUSH    BP
-        PUSH    BP
 
-        ; debug --->
-        ; アロケーションテーブル
-        PUSH    DS
-        MOV     AX, 0x0000
-        MOV     DS, AX
-        MOV     AX, 0x0200
-        MOV     DI, 0x1000
-        CALL    dbgDump
-        POP     DS
-
-        ; スタック
-        PUSH    DS
-        MOV     AX, 0x0000
-        MOV     DS, AX
-        MOV     AX, 0x0040
-        MOV     DI, 0x3fc0
-        CALL    dbgDump
-        POP     DS
-        ; <--- debug
-
-        MOV     CX, 0x0018              ; 適当にとってテスト
+        MOV     CX, 0x0031              ; 適当にとってテスト
         CALL    sysMalloc
-        PUSH    BP
-        PUSH    BP
-        PUSH    BP
-        PUSH    BP
 
-        ; debug --->
-        ; アロケーションテーブル
-        PUSH    DS
-        MOV     AX, 0x0000
-        MOV     DS, AX
-        MOV     AX, 0x0200
-        MOV     DI, 0x1000
-        CALL    dbgDump
-        POP     DS
-
-        ; スタック
-        PUSH    DS
-        MOV     AX, 0x0000
-        MOV     DS, AX
-        MOV     AX, 0x0040
-        MOV     DI, 0x3fc0
-        CALL    dbgDump
-        POP     DS
-        ; <--- debug
-
-        MOV     CX, 0x0020              ; 適当にとってテスト
+        MOV     CX, 0x0001              ; 適当にとってテスト
         CALL    sysMalloc
-        PUSH    BP
-        PUSH    BP
-        PUSH    BP
-        PUSH    BP
-
-        ; debug --->
-        ; アロケーションテーブル
-        PUSH    DS
-        MOV     AX, 0x0000
-        MOV     DS, AX
-        MOV     AX, 0x0200
-        MOV     DI, 0x1000
-        CALL    dbgDump
-        POP     DS
-
-        ; スタック
-        PUSH    DS
-        MOV     AX, 0x0000
-        MOV     DS, AX
-        MOV     AX, 0x0040
-        MOV     DI, 0x3fc0
-        CALL    dbgDump
-        POP     DS
-
-        CALL    rPopReg                 ; レジスタ取得
-        RET
-        ; <--- debug
 
         ;CALL    sysFree
         ;CMP WORD [sFreeMemSize], 0xffff
