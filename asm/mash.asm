@@ -4,6 +4,9 @@
 ; ロゴ
 ; https://jp.mathworks.com/matlabcentral/fileexchange/181715-makebanner-big-ascii-style-comment-generator
 
+; --- ファイルインクルード ---
+%include        "../asm/define.asm"
+
         ORG     0x4000
         JMP     mashInit
 
@@ -52,6 +55,9 @@ sColorError:
         DB      0x01                    ; 表示色(初期値: 赤?)
 sFreeMemSize:
         DB      0x00, 0x00              ; mallocできる残りメモリ
+
+sNowDir:
+        DW      DIRROOT                 ; 現在いるディレクトリ
 
 ; --- 初期化プログラム ---
 ; ██╗███╗  ██╗██╗████████╗
@@ -112,6 +118,16 @@ mashLoop:
 ; ╚██████╗╚██████╔╝██║ ╚═╝ ██║██║ ╚═╝ ██║██╔══██║██║ ╚███║██████╔╝
 ;  ╚═════╝ ╚═════╝ ╚═╝     ╚═╝╚═╝     ╚═╝╚═╝  ╚═╝╚═╝  ╚══╝╚═════╝ 
 
+; dir コマンド
+; 現在のディレクトリのフォルダ、ファイルを表示する
+sysDir:
+        CALL    rPushReg                ; レジスタ退避
+
+
+
+        CALL    rPopReg                 ; レジスタ取得
+        RET
+
 ; pwd コマンド
 ; 現在のディレクトリを標準出力に渡す
 sysPwd:
@@ -142,6 +158,19 @@ sysEcho:
 sysMalloc:
         CALL    rPushReg                ; レジスタ退避
         PUSH    DS                      ; セグメント退避
+
+        ; debug ---->
+        MOV     AX, 0x0000
+        MOV     DS, AX
+        MOV     ES, AX
+        MOV     SS, AX
+
+        MOV WORD [.aFAdr], 0x0000
+        MOV BYTE [.aCnt], 0x00
+        MOV BYTE [.aSize], 0x00
+        MOV WORD [.aRet], 0x0000
+        ; <---- debug
+
         CMP     CX, 0x1000              ; 確保メモリ上限チェック
         JAE     .retError
         CMP     CX, 0x0000              ; 0バイトかチェック
@@ -159,7 +188,7 @@ sysMalloc:
         MOV BYTE AH, [DS:DI]
         CMP     AH, 0x00
         JZ      .cntChk
-        MOV BYTE [.aSize], 0x00         ; シーク番地が0ではないので連続数をリセット
+        MOV BYTE [.aCnt], 0x00         ; シーク番地が0ではないので連続数をリセット
         MOV WORD AX, [.aFAdr]           ; アロケーションテーブルをシーク
         INC     AX
         MOV WORD [.aFAdr], AX
@@ -195,6 +224,7 @@ sysMalloc:
         SUB     AX, 0x1000
         SHL     AX, 0x04
         MOV WORD [.aRet], AX
+        JMP     .return
 .retError:
         MOV WORD [.aRet], 0xffff        ; とりあえずゴミデータ
 .return:
@@ -361,7 +391,7 @@ rInitMalloc:
         PUSH    DS
         MOV     AX, 0x0000
         MOV     DS, AX
-        MOV     AX, 0x0010
+        MOV     AX, 0x0200
         MOV     DI, 0x1000
         CALL    dbgDump
         POP     DS
@@ -378,16 +408,44 @@ rInitMalloc:
 
         MOV     CX, 0x0018              ; 適当にとってテスト
         CALL    sysMalloc
-
-        MOV     CX, 0x0010              ; 適当にとってテスト
-        CALL    sysMalloc
+        PUSH    BP
+        PUSH    BP
+        PUSH    BP
+        PUSH    BP
 
         ; debug --->
         ; アロケーションテーブル
         PUSH    DS
         MOV     AX, 0x0000
         MOV     DS, AX
-        MOV     AX, 0x0010
+        MOV     AX, 0x0200
+        MOV     DI, 0x1000
+        CALL    dbgDump
+        POP     DS
+
+        ; スタック
+        PUSH    DS
+        MOV     AX, 0x0000
+        MOV     DS, AX
+        MOV     AX, 0x0040
+        MOV     DI, 0x3fc0
+        CALL    dbgDump
+        POP     DS
+        ; <--- debug
+
+        MOV     CX, 0x0018              ; 適当にとってテスト
+        CALL    sysMalloc
+        PUSH    BP
+        PUSH    BP
+        PUSH    BP
+        PUSH    BP
+
+        ; debug --->
+        ; アロケーションテーブル
+        PUSH    DS
+        MOV     AX, 0x0000
+        MOV     DS, AX
+        MOV     AX, 0x0200
         MOV     DI, 0x1000
         CALL    dbgDump
         POP     DS
@@ -404,13 +462,17 @@ rInitMalloc:
 
         MOV     CX, 0x0020              ; 適当にとってテスト
         CALL    sysMalloc
+        PUSH    BP
+        PUSH    BP
+        PUSH    BP
+        PUSH    BP
 
         ; debug --->
         ; アロケーションテーブル
         PUSH    DS
         MOV     AX, 0x0000
         MOV     DS, AX
-        MOV     AX, 0x0010
+        MOV     AX, 0x0200
         MOV     DI, 0x1000
         CALL    dbgDump
         POP     DS
