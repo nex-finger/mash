@@ -1,4 +1,4 @@
-; second
+; mash
 ; TAB=4
 
 ; ロゴ
@@ -6,6 +6,7 @@
 
 ; --- ファイルインクルード ---
 %include        "../asm/define.asm"
+%define         __DEBUG                 ; デバッグ時に有効
 
         ORG     0x4000
         JMP     mashInit
@@ -17,7 +18,7 @@
 ; ██║     ██║   ██║██║╚████║ ╚═══██╗   ██║   
 ; ╚██████╗╚██████╔╝██║ ╚███║██████╔╝   ██║   
 ;  ╚═════╝ ╚═════╝ ╚═╝  ╚══╝╚═════╝    ╚═╝   
-cMashLogo:                                  ; ロゴ(35x6 = 210byte)
+cMashLogo:                              ; ロゴ(35x6 = 210byte)
         ;       ███╗   ███╗                                                        █████╗                                          ██████╗                                        ██╗  ██╗
         ;       ████╗ ████║                                                       ██╔══██╗                                        ██╔════╝                                        ██║  ██║
         ;       ██╔████╔██║                                                       ██║  ██║                                        ╚█████╗                                         ███████║
@@ -32,10 +33,10 @@ cMashLogo:                                  ; ロゴ(35x6 = 210byte)
         DB      0xdb, 0xdb, 0xba, 0x20, 0xc8, 0xcd, 0xbc, 0x20, 0xdb, 0xdb, 0xba, 0xdb, 0xdb, 0xc9, 0xcd, 0xcd, 0xdb, 0xdb, 0xba, 0xdb, 0xdb, 0xdb, 0xdb, 0xdb, 0xdb, 0xc9, 0xbc, 0xdb, 0xdb, 0xba, 0x20, 0x20, 0xdb, 0xdb, 0xba
         DB      0xc8, 0xcd, 0xbc, 0x20, 0x20, 0x20, 0x20, 0x20, 0xc8, 0xcd, 0xbc, 0xc8, 0xcd, 0xbc, 0x20, 0x20, 0xc8, 0xcd, 0xbc, 0xc8, 0xcd, 0xcd, 0xcd, 0xcd, 0xcd, 0xbc, 0x20, 0xc8, 0xcd, 0xbc, 0x20, 0x20, 0xc8, 0xcd, 0xbc
 
-cVersionLen:                                ; 版数文字列の長さ
+cVersionLen:                            ; 版数文字列の長さ
         DW      18
 
-cVersionStr:                                ; 版数文字列の内容
+cVersionStr:                            ; 版数文字列の内容
         DB      "mash system v0.1.1"
 
 ; --- 変数 ---
@@ -73,6 +74,8 @@ mashInit:
         MOV     ES, AX
         MOV     SP, 0x3fff              ; ｾｸﾞﾎﾟ
 
+        CALL    rInitMalloc
+
         ;PUSH    DS
         ;MOV     AX, 0x0000
         ;MOV     DS, AX
@@ -80,8 +83,19 @@ mashInit:
         ;MOV     DI, 0x3ff0
         ;CALL    dbgDump
         ;POP     DS
+        
+%ifdef __DEBUG
+        ; AX, BX, CX, DX, SI, DI, BP, SP, DS, ES, SS
+        MOV     AX, 0x1234
+        MOV     BX, 0x2345
+        MOV     CX, 0x3456
+        MOV     DX, 0x4567
+        MOV     SI, 0x5678
+        MOV     DI, 0x6789
+        MOV     BP, 0x789a
+%endif
 
-        CALL    rInitMalloc
+        CALL    dbgRegDump
 
         ; debug ---->
         MOV     AX, 0x0000
@@ -229,79 +243,6 @@ sysMalloc:
 .aRet:                                  ; 返却するアロケーションメモリアドレス
         DB      0x00, 0x00
 
-; コメントアウト(2025/09/28時点の欠陥malloc
-;sysMalloc:
-;        CALL    rPushReg                ; レジスタ退避
-;
-;        ; debug ---> (2025/09/28 コメントを消しても動くことまで確認)
-;        MOV     AX, 0x0000
-;        MOV     DS, AX
-;        MOV     BX, 0x1002
-;        MOV WORD [DS:BX], 0x1234
-;
-;        CALL    rPopReg                 ; レジスタ取得
-;        RET
-;        ; <--- debug
-;
-;        CMP     CX, 0x0000              ; 0バイト確保ならなにもしない
-;        JZ      .retError
-;        CMP     CX, 0x0ff0
-;        JA      .retError               ; 255*16 バイトより大きいならなにもしない
-;        
-;        PUSH    DS                      ; セグメント保存
-;        MOV     AX, 0x0000
-;        MOV     DS, AX                  ; セグメント指定！
-;        MOV     BX, 0x0000
-;        MOV     SI, 0x1000
-;.tblLoop:
-;        MOV BYTE BL, [DS:SI]
-;        CMP     BL, 0x00
-;        JNZ     .tblNext
-;.fillChk:
-;        INC     BH                      ; 連続確認数
-;        MOV     DX, 0x0000              ; DX ← BH << 4
-;        MOV     DL, BH
-;        SHL     DX, 0x04
-;        AND     DX, 0xfff0
-;        CMP     DX, CX
-;        JB      .exitCheck              ; まだ確保量が足りないなら続ける
-;        MOV     BP, AX
-;        MOV     CX, 0x0000
-;.fiilLoop:
-;        MOV     SI, 0x1000              ; SI ← 0x1000 + AX + CX
-;        ADD     SI, AX
-;        ADD     SI, CX
-;        MOV     BL, 0x00
-;        ADD     BL, BH
-;        SUB     BL, CL                  ; BL ← BH - CL
-;        MOV BYTE [DS:SI], BL               ; sTbl[AX + CX]
-;        INC     CL
-;        CMP     CL, BH
-;        JZ      .retSuccess             ; 成功終了
-;        JMP     .fiilLoop
-;.tblNext:
-;        INC     SI
-;        MOV     AX, SI
-;        MOV     BH, 0x00
-;.exitCheck:
-;        CMP     SI, 0x1fff
-;        JZ      .retError
-;        JMP     .tblLoop
-;.retSuccess:
-;        SHL     AX, 0x04
-;        AND     AX, 0xfff0
-;        MOV WORD [.aRetAddr], AX
-;        CALL    rPopReg                 ; レジスタ取得
-;        MOV WORD BP, [.aRetAddr]
-;        MOV     AX, 0x0000
-;        RET
-;.retError:                              ; 失敗時
-;        CALL    rPopReg
-;        MOV     AX, 0x0001
-;        RET
-;.aRetAddr:
-;        DB      0x00, 0x00              ; 戻り値一時格納
-
 ; free コマンド
 ; 指定されたアドレスを含む確保領域を解放する
 ; 実際の確保は16バイト単位で行われる
@@ -320,31 +261,17 @@ sysFree:
         MOV     DS, AX
         SHR     DI, 0x04
         ADD     DI, 0x1000
-.setLoop:                               ; 確保した先頭まで戻る
+.freeLoop:                               ; 確保した先頭まで戻る
         MOV     AH, [DS:DI]             ; sTbl[DI]
-        DEC     DI
-        MOV     AL, [DS:DI]             ; sTbl[DI-1]
+        MOV BYTE [DS:DI], 0x00
         INC     DI
-        CMP     AL, 0x00                ; 値が 0x00 か、ひとつ先より小さければもう先頭
-        JMP     .freeLoop
-        CMP     AH, AL
-        JAE     .freeLoop               ; sTbl[DI] >= sTbl[DI-1] ならもう先頭
-        DEC     DI
-        JMP     .setLoop                ; sTbl[DI] < sTbl[DI-1] ならもうひとつ
-.freeLoop:
-        MOV     AH, [DS:DI]
-        CMP     AH, 0x01
-        JZ      .lastFill
-        MOV BYTE AH, [DS:DI]
-        INC     DI
+        CMP     AH, 0x01                ; 値が 0x01 なら終わり
         JNZ     .freeLoop
-.lastFill:
         MOV BYTE AH, [DS:DI]
 
         POP     DS                      ; セグメント戻す
         CALL    rPopReg                 ; レジスタ取得
         RET
-
 
 
 ; --- サブルーチン --- subroutine
@@ -393,75 +320,75 @@ rInitMalloc:
 
         ; debug --->
         ; アロケーションテーブル
-                PUSH    DS
-                MOV     AX, 0x0000
-                MOV     DS, AX
-                MOV     AX, 0x0200
-                MOV     DI, 0x1000
-                CALL    dbgDump
-                POP     DS
+                ;PUSH    DS
+                ;MOV     AX, 0x0000
+                ;MOV     DS, AX
+                ;MOV     AX, 0x0200
+                ;MOV     DI, 0x1000
+                ;CALL    dbgDump
+                ;POP     DS
 
                 ; スタック
-                PUSH    DS
-                MOV     AX, 0x0000
-                MOV     DS, AX
-                MOV     AX, 0x0040
-                MOV     DI, 0x3fc0
-                CALL    dbgDump
-                POP     DS
+                ;PUSH    DS
+                ;MOV     AX, 0x0000
+                ;MOV     DS, AX
+                ;MOV     AX, 0x0040
+                ;MOV     DI, 0x3fc0
+                ;CALL    dbgDump
+                ;POP     DS
         ; <--- debug
 
-        MOV     CX, 0x0050              ; 適当にとってテスト
-        CALL    sysMalloc
+        ;MOV     CX, 0x0050              ; 適当にとってテスト
+        ;CALL    sysMalloc
 
-        MOV     CX, 0x0060              ; 適当にとってテスト
-        CALL    sysMalloc
-        PUSH    BP                      ; とっとく
+        ;MOV     CX, 0x0060              ; 適当にとってテスト
+        ;CALL    sysMalloc
+        ;PUSH    BP                      ; とっとく
 
-        MOV     CX, 0x0070              ; 適当にとってテスト
-        CALL    sysMalloc
+        ;MOV     CX, 0x0070              ; 適当にとってテスト
+        ;CALL    sysMalloc
 
         ; debug --->
         ; アロケーションテーブル
-                PUSH    DS
-                MOV     AX, 0x0000
-                MOV     DS, AX
-                MOV     AX, 0x0200
-                MOV     DI, 0x1000
-                CALL    dbgDump
-                POP     DS
+                ;PUSH    DS
+                ;MOV     AX, 0x0000
+                ;MOV     DS, AX
+                ;MOV     AX, 0x0200
+                ;MOV     DI, 0x1000
+                ;CALL    dbgDump
+                ;POP     DS
 
         ; スタック
-                PUSH    DS
-                MOV     AX, 0x0000
-                MOV     DS, AX
-                MOV     AX, 0x0040
-                MOV     DI, 0x3fc0
-                CALL    dbgDump
-                POP     DS
+                ;PUSH    DS
+                ;MOV     AX, 0x0000
+                ;MOV     DS, AX
+                ;MOV     AX, 0x0040
+                ;MOV     DI, 0x3fc0
+                ;CALL    dbgDump
+                ;POP     DS
         ; <--- debug
 
-        POP     BP
-        CALL    sysFree
+        ;POP     BP
+        ;CALL    sysFree
 
         ; debug --->
         ; アロケーションテーブル
-                PUSH    DS
-                MOV     AX, 0x0000
-                MOV     DS, AX
-                MOV     AX, 0x0200
-                MOV     DI, 0x1000
-                CALL    dbgDump
-                POP     DS
+                ;PUSH    DS
+                ;MOV     AX, 0x0000
+                ;MOV     DS, AX
+                ;MOV     AX, 0x0200
+                ;MOV     DI, 0x1000
+                ;CALL    dbgDump
+                ;POP     DS
 
         ; スタック
-                PUSH    DS
-                MOV     AX, 0x0000
-                MOV     DS, AX
-                MOV     AX, 0x0040
-                MOV     DI, 0x3fc0
-                CALL    dbgDump
-                POP     DS
+                ;PUSH    DS
+                ;MOV     AX, 0x0000
+                ;MOV     DS, AX
+                ;MOV     AX, 0x0040
+                ;MOV     DI, 0x3fc0
+                ;CALL    dbgDump
+                ;POP     DS
         ; <--- debug
 
         CALL    rPopReg                 ; レジスタ取得
@@ -661,6 +588,56 @@ dbgDump:
 .focusAddr:                             ; ダンプするアドレス
         DB      0x00, 0x00
 .byteCnt:                               ; ダンプするバイト数
+        DB      0x00, 0x00
+
+; レジスタダンプ
+; 内部で sysMalloc sysFree dbgDump を使用
+; in  : AX, BX, CX, DX, SI, DI, BP, SP, DS, ES, SS
+dbgRegDump:
+        CALL    rPushReg                ; レジスタ退避
+        PUSH    DS
+
+        PUSH    SS
+        PUSH    ES
+        PUSH    DS
+        PUSH    SP
+        PUSH    BP
+        PUSH    DI
+        PUSH    SI
+        PUSH    DX
+        PUSH    CX
+        PUSH    BX
+        PUSH    AX
+
+        MOV     CX, 22                  ; メモリ確保
+        CALL    sysMalloc
+        MOV WORD [.allocAddr], BP
+
+        MOV     AX, 0x0000
+        MOV     DS, AX
+        MOV     CX, 0x0000
+.popLoop:                               ; 2wordずつ格納
+        POP     AX
+        XOR     AH, AL                  ; リトルエンディアン → ビッグエンディアン
+        XOR     AL, AH
+        XOR     AH, AL
+        MOV WORD [DS:BP], AX
+        ADD     BP, 0x0002
+        INC     CX
+        CMP     CX, 11
+        JNZ     .popLoop
+
+        MOV     AX, 22                  ; dbgDump で 表示
+        MOV     DI, [.allocAddr]
+        CALL    dbgDump
+
+        MOV WORD BP, [.allocAddr]       ; メモリ解放
+        CALL    sysFree
+
+        POP     DS
+        CALL    rPopReg                 ; レジスタ取得
+        RET
+.allocAddr:
         DB      0x00, 0x00
 
 mashHlt:
