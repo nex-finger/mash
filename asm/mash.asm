@@ -46,6 +46,8 @@ cVersionStr:                            ; 版数文字列の内容
 ;  ╚═══██    ██║   ███████║   ██║   ██║██║     
 ; ██████╔╝   ██║   ██╔══██║   ██║   ██║╚██████╗
 ; ╚═════╝    ╚═╝   ╚═╝  ╚═╝   ╚═╝   ╚═╝ ╚═════╝
+
+; 表示関連
 sXpos:
         DB      0x00                    ; 表示xカーソル
 sYpos:
@@ -54,11 +56,17 @@ sColorNormal:
         DB      0x0f                    ; 表示色(初期値: 白)
 sColorError:
         DB      0x01                    ; 表示色(初期値: 赤?)
-sFreeMemSize:
-        DB      0x00, 0x00              ; mallocできる残りメモリ
+
+; 入出力関連
+sStdInput:                              ; 標準入力
+        DB      FD_KEYBORD
+sStdOut:                                ; 標準出力
+        DB      FD_DISPLAY
+sStdErrout:                             ; 標準エラー出力
+        DB      FD_DISPLAY
 
 sNowDir:
-        DW      DIRROOT                 ; 現在いるディレクトリ
+        DW      DIR_ROOT                 ; 現在いるディレクトリ
 
 ; --- 初期化プログラム ---
 ; ██╗███╗  ██╗██╗████████╗
@@ -137,10 +145,21 @@ mashLoop:
 sysDir:
         CALL    rPushReg                ; レジスタ退避
 
+        MOV     0x0200                  ; 現在のディレクトリ用のメモリを取得
+        CALL    sysMalloc
+        MOV WORD [.allocAddr1]
+        MOV     0x0200                  ; リンク先のディレクトリ用のメモリを取得
+        CALL    sysMalloc
+        MOV WORD [.allocAddr2]
 
+        
 
         CALL    rPopReg                 ; レジスタ取得
         RET
+.allocAddr1:
+        DB      0x00, 0x00
+.allocAddr2:
+        DB      0x00, 0x00
 
 ; pwd コマンド
 ; 現在のディレクトリを標準出力に渡す
@@ -261,18 +280,18 @@ sysFree:
         MOV     DS, AX
         SHR     DI, 0x04
         ADD     DI, 0x1000
-.freeLoop:                               ; 確保した先頭まで戻る
-        MOV     AH, [DS:DI]             ; sTbl[DI]
+.freeLoop:                              ; 確保した先頭まで戻る
+        MOV BYTE AH, [DS:DI]            ; sTbl[DI]
+        CMP     AH, 0x00                ; 値が 0x00 なら異常メモリを入力している
+        JZ      .next
         MOV BYTE [DS:DI], 0x00
         INC     DI
-        CMP     AH, 0x01                ; 値が 0x01 なら終わり
+        CMP     AH, 0x01                ; 値が 0x01 まで続ける
         JNZ     .freeLoop
-        MOV BYTE AH, [DS:DI]
-
+.next:
         POP     DS                      ; セグメント戻す
         CALL    rPopReg                 ; レジスタ取得
         RET
-
 
 ; --- サブルーチン --- subroutine
 ;  ██████╗██╗   ██╗██████╗      ██████╗  ██████╗ ██╗   ██╗████████╗██╗███╗  ██╗███████╗
@@ -317,80 +336,28 @@ rInitMalloc:
 
         POP     AX
         MOV     ES, AX
-
-        ; debug --->
-        ; アロケーションテーブル
-                ;PUSH    DS
-                ;MOV     AX, 0x0000
-                ;MOV     DS, AX
-                ;MOV     AX, 0x0200
-                ;MOV     DI, 0x1000
-                ;CALL    dbgDump
-                ;POP     DS
-
-                ; スタック
-                ;PUSH    DS
-                ;MOV     AX, 0x0000
-                ;MOV     DS, AX
-                ;MOV     AX, 0x0040
-                ;MOV     DI, 0x3fc0
-                ;CALL    dbgDump
-                ;POP     DS
-        ; <--- debug
-
-        ;MOV     CX, 0x0050              ; 適当にとってテスト
+%ifdef __DEBUG
+        ;MOV     CX, 0x0012              ; 動的確保テスト
         ;CALL    sysMalloc
-
-        ;MOV     CX, 0x0060              ; 適当にとってテスト
+        ;MOV     CX, 0x0034
         ;CALL    sysMalloc
-        ;PUSH    BP                      ; とっとく
-
-        ;MOV     CX, 0x0070              ; 適当にとってテスト
+        ;PUSH    BP
+        ;MOV     CX, 0x0056
         ;CALL    sysMalloc
-
-        ; debug --->
-        ; アロケーションテーブル
-                ;PUSH    DS
-                ;MOV     AX, 0x0000
-                ;MOV     DS, AX
-                ;MOV     AX, 0x0200
-                ;MOV     DI, 0x1000
-                ;CALL    dbgDump
-                ;POP     DS
-
-        ; スタック
-                ;PUSH    DS
-                ;MOV     AX, 0x0000
-                ;MOV     DS, AX
-                ;MOV     AX, 0x0040
-                ;MOV     DI, 0x3fc0
-                ;CALL    dbgDump
-                ;POP     DS
-        ; <--- debug
-
         ;POP     BP
         ;CALL    sysFree
-
-        ; debug --->
-        ; アロケーションテーブル
-                ;PUSH    DS
-                ;MOV     AX, 0x0000
-                ;MOV     DS, AX
-                ;MOV     AX, 0x0200
-                ;MOV     DI, 0x1000
-                ;CALL    dbgDump
-                ;POP     DS
-
-        ; スタック
-                ;PUSH    DS
-                ;MOV     AX, 0x0000
-                ;MOV     DS, AX
-                ;MOV     AX, 0x0040
-                ;MOV     DI, 0x3fc0
-                ;CALL    dbgDump
-                ;POP     DS
-        ; <--- debug
-
+        ;MOV     AX, 0x1010
+        ;MOV     BP, AX
+        ;CALL    sysFree
+        
+        ;PUSH    DS                      ; アロケーションテーブル
+        ;MOV     AX, 0x0000
+        ;MOV     DS, AX
+        ;MOV     AX, 0x0200
+        ;MOV     DI, 0x1000
+        ;CALL    dbgDump
+        ;POP     DS
+%endif
         CALL    rPopReg                 ; レジスタ取得
         RET
 
@@ -646,10 +613,3 @@ mashHlt:
 ; --- 0埋め ---
 secEnd:
         times 0x4000-($-$$) DB 0        ; mash常駐は16セクタ
-
-; --- メモ ---
-;
-;       メモリダンプフォーマット
-;        MOV     AX, 0x0010              ; 256バイト
-;        MOV     DI, 0x4000              ; 0x4000から
-;        CALL    dbgDump
