@@ -94,24 +94,42 @@ mashInit:
         
 %ifdef __DEBUG
         ; AX, BX, CX, DX, SI, DI, BP, SP, DS, ES, SS
-        MOV     AX, 0x1234
-        MOV     BX, 0x2345
-        MOV     CX, 0x3456
-        MOV     DX, 0x4567
-        MOV     SI, 0x5678
-        MOV     DI, 0x6789
-        MOV     BP, 0x789a
+        ;MOV     AX, 0x1234
+        ;MOV     BX, 0x2345
+        ;MOV     CX, 0x3456
+        ;MOV     DX, 0x4567
+        ;MOV     SI, 0x5678
+        ;MOV     DI, 0x6789
+        ;MOV     BP, 0x789a
 %endif
 
         CALL    dbgRegDump
 
-        ; debug ---->
-        MOV     AX, 0x0000
-        MOV     DS, AX
-        MOV     SS, AX
-        MOV     ES, AX
-        ; <---- debug
+%ifdef __DEBUG
+        ;MOV     AX, 0x0000
+        ;MOV     DS, AX
+        ;MOV     SS, AX
+        ;MOV     ES, AX
+%endif
+
         CALL    cmdVer                  ; ロゴ+版数表示
+
+%ifdef __DEBUG
+        ; スクロールテスト
+.dbgLoop:
+        MOV     AH, 0x00
+        INT     0x16
+
+        MOV     AH, 0x06
+        MOV     AL, 0x01
+        MOV     BH, 0x07
+        MOV     CX, 0x0000
+        MOV     DH, 24
+        MOV     DL, 79
+        INT     0x10
+
+        JMP     .dbgLoop
+%endif
         
         JMP     mashLoop                ; ループ処理へ移行
 
@@ -145,14 +163,14 @@ mashLoop:
 sysDir:
         CALL    rPushReg                ; レジスタ退避
 
-        MOV     0x0200                  ; 現在のディレクトリ用のメモリを取得
+        MOV     CX, 0x0200              ; 現在のディレクトリ用のメモリを取得
         CALL    sysMalloc
-        MOV WORD [.allocAddr1]
-        MOV     0x0200                  ; リンク先のディレクトリ用のメモリを取得
+        MOV WORD [.allocAddr1], BP
+        MOV     CX, 0x0200              ; リンク先のディレクトリ用のメモリを取得
         CALL    sysMalloc
-        MOV WORD [.allocAddr2]
+        MOV WORD [.allocAddr2], BP
 
-        
+
 
         CALL    rPopReg                 ; レジスタ取得
         RET
@@ -322,7 +340,6 @@ rPrint:
 rInitMalloc:
         CALL    rPushReg                ; レジスタ退避
 
-        MOV WORD [sFreeMemSize], 0x1000 ; 使用可能メモリを64kBに
         MOV     AX, ES
         PUSH    AX
         MOV     AX, 0x0000
@@ -358,6 +375,20 @@ rInitMalloc:
         ;CALL    dbgDump
         ;POP     DS
 %endif
+        CALL    rPopReg                 ; レジスタ取得
+        RET
+
+; printf 等の文字列解析+文字出力(エスケープシーケンスあり)
+; 256文字まで(終端文字含む)
+; %c: 文字, %s: 文字列, %d: 10進数, %x: 16進数(小文字), %X: 16進数(大文字)
+; \a: 警報音, \n: 復帰改行, \r: 復帰, \t: タブ, \o: 更新なしで次の文字へ, \\, \?, \', \": 1文字, \0: 文字列終了
+; \Uxx: カーソルをxx(10新2桁)行上, \Dxx: 下, \Rxx: 右, \Lxx: 左
+; \Xxx: カーソルのx座標をxx(10新2桁)に移動, \Yxx: カーソルのx座標をxx(10新2桁)に移動, 
+; in  : AX 出力先ファイルディスクリプタ
+;     : SI 文字列の先頭ポインタ
+;     : DI 変数の先頭ポインタ(DI:1つ目の変数, DI+4:2つ目の変数...)
+rPrintf:
+        CALL    rPushReg                ; レジスタ退避
         CALL    rPopReg                 ; レジスタ取得
         RET
 
