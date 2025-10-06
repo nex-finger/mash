@@ -64,9 +64,13 @@ sStdOut:                                ; 標準出力
         DB      FD_DISPLAY
 sStdErrout:                             ; 標準エラー出力
         DB      FD_DISPLAY
+sOneLineBuf:
+        times   0x0100 DB 0x00          ; 入力バッファ(256byte)
+sOneLineSeek:
+        DB      0x00                    ; シークオフセット
 
 sNowDir:
-        DW      DIR_ROOT                 ; 現在いるディレクトリ
+        DW      DIR_ROOT                ; 現在いるディレクトリ
 
 ; --- 初期化プログラム ---
 ; ██╗███╗  ██╗██╗████████╗
@@ -116,19 +120,19 @@ mashInit:
 
 %ifdef __DEBUG
         ; スクロールテスト
-.dbgLoop:
-        MOV     AH, 0x00
-        INT     0x16
+;.dbgLoop:
+        ;MOV     AH, 0x00
+        ;INT     0x16
 
-        MOV     AH, 0x06
-        MOV     AL, 0x01
-        MOV     BH, 0x07
-        MOV     CX, 0x0000
-        MOV     DH, 24
-        MOV     DL, 79
-        INT     0x10
+        ;MOV     AH, 0x06
+        ;MOV     AL, 0x01
+        ;MOV     BH, 0x07
+        ;MOV     CX, 0x0000
+        ;MOV     DH, 24
+        ;MOV     DL, 79
+        ;INT     0x10
 
-        JMP     .dbgLoop
+        ;JMP     .dbgLoop
 %endif
         
         JMP     mashLoop                ; ループ処理へ移行
@@ -141,14 +145,27 @@ mashInit:
 ; ███████╗╚██████╔╝╚██████╔╝██║     
 ; ╚══════╝ ╚═════╝  ╚═════╝ ╚═╝     
 mashLoop:
-        CALL    sysPwd                  ; 現在のディレクトリを表示
+        CALL    rPutCR                  ; 改行
+        CALL    rOneLineClear           ; バッファクリア
+.inputLoop:
+        CALL    rOneLineInput           ; キーボード入力 → バッファ+出力
+        CMP     AH, 0x00
+        JZ      .inputLoop
 
-        MOV     BP, .sAllow             ; ">"表示
-        CALL    sysEcho
+        CALL    rPutCR                  ; 改行
+        MOV     AX, 0x0000
+        MOV     DS, AX
+        MOV     DI, [sOneLineBuf]
+        CALL    sysPrintf               ; 表示
+        CALL    rPutCR                  ; 改行
+
+        ;CALL    sysPwd                  ; 現在のディレクトリを表示
+
+        ;MOV     BP, .sAllow             ; ">"表示
+        ;CALL    sysEcho
         
         JMP     mashLoop                ; 永遠にループする
 .sAllow:
-        DB      ">\0"
 
 ; --- ビルトインコマンド ---
 ;  ██████╗ ██████╗ ███╗   ███╗███╗   ███╗ █████╗ ███╗  ██╗██████╗ 
@@ -169,8 +186,6 @@ sysDir:
         MOV     CX, 0x0200              ; リンク先のディレクトリ用のメモリを取得
         CALL    sysMalloc
         MOV WORD [.allocAddr2], BP
-
-
 
         CALL    rPopReg                 ; レジスタ取得
         RET
@@ -311,13 +326,20 @@ sysFree:
         CALL    rPopReg                 ; レジスタ取得
         RET
 
-; --- サブルーチン --- subroutine
-;  ██████╗██╗   ██╗██████╗      ██████╗  ██████╗ ██╗   ██╗████████╗██╗███╗  ██╗███████╗
-; ██╔════╝██║   ██║██╔══██╗     ██╔══██╗██╔═══██╗██║   ██║╚══██╔══╝██║████╗ ██║██╔════╝
-; ╚█████╗ ██║   ██║██████╔╝     ██████╔╝██║   ██║██║   ██║   ██║   ██║██╔██╗██║███████╗
-;  ╚═══██╗██║   ██║██╔══██╗     ██╔══██╗██║   ██║██║   ██║   ██║   ██║██║╚████║██╔════╝
-; ██████╔╝╚██████╔╝██████╔╝     ██║  ██║╚██████╔╝╚██████╔╝   ██║   ██║██║ ╚███║███████╗
-; ╚═════╝  ╚═════╝ ╚═════╝      ╚═╝  ╚═╝ ╚═════╝  ╚═════╝    ╚═╝   ╚═╝╚═╝  ╚══╝╚══════╝
+; printf 等の文字列解析+文字出力(エスケープシーケンスあり)
+; 256文字まで(終端文字含む)
+; %c: 文字, %s: 文字列, %d: 10進数, %x: 16進数(小文字), %X: 16進数(大文字)
+; \a: 警報音, \n: 復帰改行, \r: 復帰, \t: タブ, \o: 更新なしで次の文字へ, \\, \?, \', \": 1文字, \0: 文字列終了
+; \Uxx: カーソルをxx(10新2桁)行上, \Dxx: 下, \Rxx: 右, \Lxx: 左
+; \Xxx: カーソルのx座標をxx(10新2桁)に移動, \Yxx: カーソルのx座標をxx(10新2桁)に移動, 
+; in  : AX 出力先ファイルディスクリプタ
+;     : SI 文字列の先頭ポインタ
+;     : DI 変数の先頭ポインタ(DI:1つ目の変数, DI+4:2つ目の変数...)
+sysPrintf:
+        CALL    rPushReg                ; レジスタ退避
+
+        CALL    rPopReg                 ; レジスタ取得
+        RET
 
 ; 文字列の表示
 ; 終端文字(0x00)を確認するまで文字を表示し続ける
@@ -327,8 +349,111 @@ sysFree:
 ;                   0: 成功
 ;                   1: 256文字以上の文字列を表示しようとした
 ;                   2: その他の失敗
-rPrint:
+sysPrint:
         CALL    rPushReg                ; レジスタ退避
+
+
+
+        CALL    rPopReg                 ; レジスタ取得
+        RET
+
+; 単一の文字出力
+; カーソル位置の更新も行う
+; in  : AL      表示する文字
+sysPutChar:
+
+
+; --- サブルーチン --- subroutine
+;  ██████╗██╗   ██╗██████╗      ██████╗  ██████╗ ██╗   ██╗████████╗██╗███╗  ██╗███████╗
+; ██╔════╝██║   ██║██╔══██╗     ██╔══██╗██╔═══██╗██║   ██║╚══██╔══╝██║████╗ ██║██╔════╝
+; ╚█████╗ ██║   ██║██████╔╝     ██████╔╝██║   ██║██║   ██║   ██║   ██║██╔██╗██║███████╗
+;  ╚═══██╗██║   ██║██╔══██╗     ██╔══██╗██║   ██║██║   ██║   ██║   ██║██║╚████║██╔════╝
+; ██████╔╝╚██████╔╝██████╔╝     ██║  ██║╚██████╔╝╚██████╔╝   ██║   ██║██║ ╚███║███████╗
+; ╚═════╝  ╚═════╝ ╚═════╝      ╚═╝  ╚═╝ ╚═════╝  ╚═════╝    ╚═╝   ╚═╝╚═╝  ╚══╝╚══════╝
+
+; カーソル位置更新
+; in  : (なし)
+; out : (なし)
+rSetCursol:
+        CALL    rPushReg                ; レジスタ退避
+
+        MOV     AH, 0x02
+        MOV     BH, 0x00
+        MOV BYTE DL, [sXpos]
+        MOV BYTE DH, [sYpos]
+
+        CALL    rPopReg                 ; レジスタ取得
+        RET
+
+; 改行(次の行の一番左に移動)
+; in  : (なし)
+; out : (なし)
+rPutCR:
+        CALL    rPushReg                ; レジスタ退避
+
+        MOV BYTE [sXpos], 0x00          ; 一番左に
+        MOV BYTE AH, [sYpos]
+        CMP     AH, 24
+        JZ      .slideLine              ; すでに一番下なら1行ずれる
+        INC     AH
+        MOV BYTE [sYpos], AH            ; まだ下があるなら次へ
+        JMP     .setCursol
+.slideLine:
+        MOV     AH, 0x06
+        MOV     AL, 0x01
+        MOV     BH, 0x07
+        MOV     CX, 0x0000
+        MOV     DH, 24
+        MOV     DL, 79
+        INT     0x10
+.setCursol:                             ; カーソル位置更新
+        CALL    rSetCursol
+
+        CALL    rPopReg                 ; レジスタ取得
+        RET
+
+; シェル入力をディスプレイとバッファに格納する
+; in  : (なし)
+; out : AH      0: 続ける
+;               1: 終了(enterキー)
+;               2: バッファオーバーフロー
+rOneLineInput:
+        CALL    rPushReg                ; レジスタ退避
+
+        CALL    rIsPrint                ; 印字可能文字か確認
+        CMP     AH, 0x00
+        JNZ     .exitLoutine            ; 印字不可ならなにもしない
+
+        ; ディスプレイに表示
+
+        ; バッファに格納
+
+        ; カーソル位置計算
+
+        ; カーソル位置更新
+
+.exitLoutine:
+        CALL    rPopReg                 ; レジスタ取得
+        RET
+
+; 入力バッファをクリアする
+; in  : (なし)
+; out : (なし)
+rOneLineClear:
+        CALL    rPushReg                ; レジスタ退避
+
+        MOV     AX, 0x0000
+        MOV     DS, AX
+        MOV WORD DI, [sOneLineBuf]
+        MOV     CX, 0x0000
+.clearLoop:                             ; 0埋め
+        MOV BYTE [DS:DI], 0x00
+        INC     CX
+        CMP     CX, 0x0100
+        JNZ     .clearLoop
+
+        MOV BYTE [sOneLineSeek], 0x00   ; バッファシークリセット
+
         CALL    rPopReg                 ; レジスタ取得
         RET
 
@@ -375,20 +500,6 @@ rInitMalloc:
         ;CALL    dbgDump
         ;POP     DS
 %endif
-        CALL    rPopReg                 ; レジスタ取得
-        RET
-
-; printf 等の文字列解析+文字出力(エスケープシーケンスあり)
-; 256文字まで(終端文字含む)
-; %c: 文字, %s: 文字列, %d: 10進数, %x: 16進数(小文字), %X: 16進数(大文字)
-; \a: 警報音, \n: 復帰改行, \r: 復帰, \t: タブ, \o: 更新なしで次の文字へ, \\, \?, \', \": 1文字, \0: 文字列終了
-; \Uxx: カーソルをxx(10新2桁)行上, \Dxx: 下, \Rxx: 右, \Lxx: 左
-; \Xxx: カーソルのx座標をxx(10新2桁)に移動, \Yxx: カーソルのx座標をxx(10新2桁)に移動, 
-; in  : AX 出力先ファイルディスクリプタ
-;     : SI 文字列の先頭ポインタ
-;     : DI 変数の先頭ポインタ(DI:1つ目の変数, DI+4:2つ目の変数...)
-rPrintf:
-        CALL    rPushReg                ; レジスタ退避
         CALL    rPopReg                 ; レジスタ取得
         RET
 
