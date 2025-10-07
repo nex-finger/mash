@@ -25,3 +25,20 @@
 %define     FD_FILE1        0x04
 %define     FD_FILE2        0x05
 %define     FD_FILE3        0x06
+
+; --- マクロ ---
+; シリアル初期化
+%macro MACRO_SERIAL_INIT 0
+        MOV     AH, 0x00                ; シリアルポート設定
+        MOV     AL, 0xe3                ; 0bBBBPPSCC, 9600bps, None, 1bit, 8bit
+        MOV     DX, 0x0000              ; 0ch = COM1, xch = COMx+1
+        INT     0x14
+%endmacro
+
+; シリアル1文字出力
+%macro MACRO_SERIAL_PUTC 1
+        PUSH    AX
+        MOV     AL, %1
+        CALL    dbgSingle
+        POP     AX
+%endmacro
