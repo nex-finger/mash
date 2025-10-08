@@ -738,6 +738,12 @@ rOneLineInput:
         INT     0x16
         MOV BYTE [.aChar], AL
 
+        CMP     AL, 0x0a
+        JNZ     .print
+        MOV BYTE [.aRet], 0x01
+        JMP     .exitLoutine
+
+.print:
         CALL    libIsprint              ; 印字可能か判定
         CMP     AH, 0x00
         JZ      .exitLoutine            ; 印字不可ならなにもしない
@@ -769,6 +775,8 @@ rOneLineInput:
         CMP BYTE [sYpos], 25
         JNZ     .next
         MOV BYTE [sYpos], 24
+
+        MOV BYTE [.aRet], 0x00
         
         ;MOV     AH, 0x06               ; 80列目に印字するとBIOS側でスクロールしてくれるらしい
         ;MOV     AL, 0x01
@@ -781,9 +789,11 @@ rOneLineInput:
         CALL    rSetCursol              ; カーソル位置更新
 .exitLoutine:
         CALL    rPopReg                 ; レジスタ取得
-        MOV     AH, 0x00
+        MOV BYTE AH, [.aRet]
         RET
 .aChar:
+        DB      0x00
+.aRet:
         DB      0x00
 
 ; 入力バッファをクリアする
