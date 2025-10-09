@@ -71,7 +71,7 @@ sStdErrout:                             ; 標準エラー出力
 sOneLineBuf:
         times   0x0100 DB 0x00          ; 入力バッファ(256byte)
 sOneLineSeek:
-        DB      0x00                    ; シークオフセット
+        DW      0x0000                  ; シークオフセット
 
 sNowDir:
         DW      DIR_ROOT                ; 現在いるディレクトリ
@@ -152,14 +152,33 @@ mashLoop:
 .inputLoop:
         CALL    rOneLineInput           ; キーボード入力 → バッファ+出力
         CMP     AH, 0x00
-        JZ      .inputLoop
 
-        CALL    rPutCR                  ; 改行
+; debug ---->
+; in  : AX      ダンプするバイト数
+;     : DS:DI   ダンプ開始アドレス
         MOV     AX, 0x0000
         MOV     DS, AX
-        MOV     DI, [sOneLineBuf]
-        CALL    sysPrintf               ; 表示
-        CALL    rPutCR                  ; 改行
+        MOV     AX, 0x0010
+        MOV     DI, sOneLineBuf-8
+        CALL    dbgDump
+
+        MOV     AX, 0x0000
+        MOV     DS, AX
+        MOV     AX, 0x0010
+        MOV     DI, sOneLineBuf+250
+        CALL    dbgDump
+; <---- debug
+
+        CMP     AH, 0x00
+        JZ      .inputLoop
+
+        ;CALL    rPutCR                  ; 改行
+        ;MOV     AX, 0x0000
+        ;MOV     DS, AX
+        ;MOV     ES, AX
+        ;MOV     SS, AX
+        ;MOV     DI, [sOneLineBuf]
+        ;CALL    sysPrintf               ; 表示
 
         ;CALL    sysPwd                  ; 現在のディレクトリを表示
 
@@ -695,6 +714,7 @@ rSetCursol:
         MOV     BH, 0x00
         MOV BYTE DL, [sXpos]
         MOV BYTE DH, [sYpos]
+        INT     0x10
 
         CALL    rPopReg                 ; レジスタ取得
         RET
@@ -736,6 +756,23 @@ rOneLineInput:
 
         MOV     AH, 0x00                ; 1文字取得
         INT     0x16
+        CMP     AL, 0x0d                ; enterで終了
+        JNZ     .setChar
+        MOV BYTE [.aRet], 0x01
+        MOV BYTE [sXpos], 0x00
+        INC BYTE [sYpos]
+        CMP BYTE [sYpos], 25
+        JNZ     .next
+        MOV BYTE [sYpos], 24
+        MOV     AH, 0x06               ; 改行
+        MOV     AL, 0x01
+        MOV     BH, 0x07
+        MOV     CX, 0x0000
+        MOV     DH, 24
+        MOV     DL, 79
+        INT     0x10
+        JMP     .next
+.setChar:
         MOV BYTE [.aChar], AL
 
         CMP     AL, 0x0a
@@ -750,10 +787,15 @@ rOneLineInput:
 
         MOV     AX, 0x0000              ; バッファに格納
         MOV     ES, AX
-        MOV     BP, sOneLineBuf
-        ADD     BP, sOneLineSeek
+        MOV     DS, AX
+        MOV     SS, AX
+        MOV     AX, sOneLineBuf
+        ADD     AX, [sOneLineSeek]
+        MOV     BP, AX
+        INC     AX
+        MOV WORD [sOneLineSeek], AX
         MOV BYTE AL, [.aChar]
-        MOV BYTE [ES:BP], AL
+        MOV BYTE [ES:BP], AL  
 
         MOV     AX, 0x0000              ; ディスプレイに表示
         MOV     ES, AX
@@ -804,15 +846,19 @@ rOneLineClear:
 
         MOV     AX, 0x0000
         MOV     DS, AX
-        MOV WORD DI, [sOneLineBuf]
+        MOV     ES, AX
+        MOV     SS, AX
+        MOV WORD DI, sOneLineBuf
         MOV     CX, 0x0000
 .clearLoop:                             ; 0埋め
         MOV BYTE [DS:DI], 0x00
         INC     CX
+        INC     DI
         CMP     CX, 0x0100
         JNZ     .clearLoop
 
-        MOV BYTE [sOneLineSeek], 0x00   ; バッファシークリセット
+        MOV WORD [sOneLineSeek], 0x0000 ; バッファシークリセット
+        MOV WORD DI, [sOneLineBuf]
 
         CALL    rPopReg                 ; レジスタ取得
         RET
