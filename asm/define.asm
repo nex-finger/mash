@@ -1,3 +1,7 @@
+; --- 画面関連 ---
+%define     DISP_COLSIZE    79
+%define     DISP_LINESIZE   24
+
 ; --- ディレクトリ構造 ---
 ; root
 %define     DIR_ROOT        0x0015

@@ -396,11 +396,11 @@ sysPutChar:
 ; //////////////////////////////////////////////////////////////////////////// ;
 
 ; //////////////////////////////////////////////////////////////////////////// ;
-; ctype.h(c89)
-;       libIsalnum      libIsAlpha      libIsblank      libIscntrl
-;       libIsdigit      libIsgraph      libIslower      libIsprint   
-;       libIspuct       libIsspace      libIsupper      libIsxdigit
-;       libTolower      libToupper
+; ctype.h(c89)                                                                 ;
+;       libIsalnum      libIsAlpha      libIsblank      libIscntrl             ;
+;       libIsdigit      libIsgraph      libIslower      libIsprint             ;
+;       libIspuct       libIsspace      libIsupper      libIsxdigit            ;
+;       libTolower      libToupper                                             ;
 ; //////////////////////////////////////////////////////////////////////////// ;
 
 ; 英大文字か判定
@@ -695,6 +695,72 @@ libToupper:
         RET
 
 ; //////////////////////////////////////////////////////////////////////////// ;
+; escseq.h                                                                     ;
+;       libSetCursol            libSlideDisp            libSetCursolNextCol    ;
+;       libSetCursolNextLine                                                   ;
+; //////////////////////////////////////////////////////////////////////////// ;
+
+; カーソル表示更新
+libSetCursol:
+        CALL    rPushReg                ; レジスタ退避
+
+        MOV     AH, 0x02
+        MOV     BH, 0x00
+        MOV BYTE DL, [sXpos]
+        MOV BYTE DH, [sYpos]
+        INT     0x10
+
+        CALL    rPopReg                 ; レジスタ取得
+        RET
+
+; 画面表示を1行上に移動
+libSlideDisp:
+        CALL    rPushReg                ; レジスタ退避
+
+        MOV     AH, 0x06
+        MOV     AL, 0x01
+        MOV     BH, 0x07
+        MOV     CX, 0x0000
+        MOV     DH, 24
+        MOV     DL, 79
+        INT     0x10
+
+        CALL    rPopReg                 ; レジスタ取得
+        RET
+
+libSetCursolNextCol:
+        CALL    rPushReg                ; レジスタ退避
+
+        ;MOV     AH, 0x02
+        ;MOV     BH, 0x00
+        ;MOV BYTE DL, [sXpos]
+        ;MOV BYTE DH, [sYpos]
+        ;INT     0x10
+
+        CALL    rSetCursol              ; カーソル表示更新
+
+        CALL    rPopReg                 ; レジスタ取得
+        RET
+
+libSetCursolNextLine:
+        CALL    rPushReg                ; レジスタ退避
+
+        MOV BYTE [sXpos], 0x00          ; 一番左に
+        MOV BYTE AH, [sYpos]
+        CMP     AH, 24
+        JZ      .slideLine              ; すでに一番下なら1行ずれる
+        INC     AH
+        MOV BYTE [sYpos], AH            ; まだ下があるなら次へ
+        JMP     .setCursol
+.slideLine:
+        CALL    libSlideDisp
+.setCursol:                             ; カーソル位置更新
+        CALL    rSetCursol
+
+        CALL    rPopReg                 ; レジスタ取得
+        RET
+
+; //////////////////////////////////////////////////////////////////////////// ;
 ; --- サブルーチン ---
 ;  ██████╗██╗   ██╗██████╗      ██████╗  ██████╗ ██╗   ██╗████████╗██╗███╗  ██╗███████╗
 ; ██╔════╝██║   ██║██╔══██╗     ██╔══██╗██╔═══██╗██║   ██║╚══██╔══╝██║████╗ ██║██╔════╝
@@ -704,7 +770,7 @@ libToupper:
 ; ╚═════╝  ╚═════╝ ╚═════╝      ╚═╝  ╚═╝ ╚═════╝  ╚═════╝    ╚═╝   ╚═╝╚═╝  ╚══╝╚══════╝
 ; //////////////////////////////////////////////////////////////////////////// ;
 
-; カーソル位置更新
+; カーソル表示更新
 ; in  : (なし)
 ; out : (なし)
 rSetCursol:
@@ -719,7 +785,40 @@ rSetCursol:
         CALL    rPopReg                 ; レジスタ取得
         RET
 
-; 改行(次の行の一番左に移動)
+; 画面をスクロール
+rSlideDisplay:
+        CALL    rPushReg                ; レジスタ退避
+
+        MOV     AH, 0x06
+        MOV     AL, 0x01
+        MOV     BH, 0x07
+        MOV     CX, 0x0000
+        MOV     DH, 24
+        MOV     DL, 79
+        INT     0x10
+
+        CALL    rPopReg                 ; レジスタ取得
+        RET
+
+; 次の文字の位置にカーソルを移動
+; in  : (なし)
+; out : (なし)
+rSetCursolNextCol:
+        CALL    rPushReg                ; レジスタ退避
+
+        ;MOV     AH, 0x02
+        ;MOV     BH, 0x00
+        ;MOV BYTE DL, [sXpos]
+        ;MOV BYTE DH, [sYpos]
+        ;INT     0x10
+
+        CALL    rSetCursol              ; カーソル表示更新
+
+        CALL    rPopReg                 ; レジスタ取得
+        RET
+
+
+; 改行(次の行の一番左にカーソルを移動)
 ; in  : (なし)
 ; out : (なし)
 rPutCR:
@@ -733,13 +832,7 @@ rPutCR:
         MOV BYTE [sYpos], AH            ; まだ下があるなら次へ
         JMP     .setCursol
 .slideLine:
-        MOV     AH, 0x06
-        MOV     AL, 0x01
-        MOV     BH, 0x07
-        MOV     CX, 0x0000
-        MOV     DH, 24
-        MOV     DL, 79
-        INT     0x10
+        ;
 .setCursol:                             ; カーソル位置更新
         CALL    rSetCursol
 
@@ -756,8 +849,12 @@ rOneLineInput:
 
         MOV     AH, 0x00                ; 1文字取得
         INT     0x16
+
         CMP     AL, 0x0d                ; enterで終了
         JNZ     .setChar
+
+        
+        
         MOV BYTE [.aRet], 0x01
         MOV BYTE [sXpos], 0x00
         INC BYTE [sYpos]
