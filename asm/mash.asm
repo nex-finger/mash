@@ -727,6 +727,7 @@ libSlideDisp:
 
         CALL    rPopReg                 ; レジスタ取得
         RET
+        
 
 libSetCursolNextCol:
         CALL    rPushReg                ; レジスタ退避
