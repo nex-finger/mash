@@ -727,8 +727,8 @@ libSlideDisp:
 
         CALL    rPopReg                 ; レジスタ取得
         RET
-        
 
+; カーソルを次の列へ
 libSetCursolNextCol:
         CALL    rPushReg                ; レジスタ退避
 
@@ -743,6 +743,7 @@ libSetCursolNextCol:
         CALL    rPopReg                 ; レジスタ取得
         RET
 
+; カーソルを次の行へ
 libSetCursolNextLine:
         CALL    rPushReg                ; レジスタ退避
 
@@ -760,6 +761,11 @@ libSetCursolNextLine:
 
         CALL    rPopReg                 ; レジスタ取得
         RET
+
+; //////////////////////////////////////////////////////////////////////////// ;
+; stdio.h                                                                      ;
+;       libPutc                                                                ;
+; //////////////////////////////////////////////////////////////////////////// ;
 
 ; //////////////////////////////////////////////////////////////////////////// ;
 ; --- サブルーチン ---
@@ -852,24 +858,17 @@ rOneLineInput:
         INT     0x16
 
         CMP     AL, 0x0d                ; enterで終了
-        JNZ     .setChar
+        JNZ     .libPutc
+.caseEnter:                             ; enterを入力した場合
+        CALL    libSetCursolNextLine    ; 改行用のカーソル移動
+        JMP     .next01
 
-        
-        
-        MOV BYTE [.aRet], 0x01
-        MOV BYTE [sXpos], 0x00
-        INC BYTE [sYpos]
-        CMP BYTE [sYpos], 25
-        JNZ     .next
-        MOV BYTE [sYpos], 24
-        MOV     AH, 0x06               ; 改行
-        MOV     AL, 0x01
-        MOV     BH, 0x07
-        MOV     CX, 0x0000
-        MOV     DH, 24
-        MOV     DL, 79
-        INT     0x10
-        JMP     .next
+.caseNotEnter:                          ; enter以外を入力した場合
+        CALL    libSetCursolNextCol     ; 通常用のカーソル移動
+        JMP     .next01
+
+.next01:
+        CALL    libSetCursol
 .setChar:
         MOV BYTE [.aChar], AL
 
