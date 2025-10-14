@@ -147,7 +147,7 @@ mashInit:
 ; //////////////////////////////////////////////////////////////////////////// ;
 
 mashLoop:
-        CALL    rPutCR                  ; 改行
+        CALL    libSetCursolNextLine    ; 改行
         CALL    rOneLineClear           ; バッファクリア
 .inputLoop:
         CALL    rOneLineInput           ; キーボード入力 → バッファ+出力
@@ -162,11 +162,11 @@ mashLoop:
         MOV     DI, sOneLineBuf-8
         CALL    dbgDump
 
-        MOV     AX, 0x0000
-        MOV     DS, AX
-        MOV     AX, 0x0010
-        MOV     DI, sOneLineBuf+250
-        CALL    dbgDump
+        ;MOV     AX, 0x0000
+        ;MOV     DS, AX
+        ;MOV     AX, 0x0010
+        ;MOV     DI, sOneLineBuf+250
+        ;CALL    dbgDump
 ; <---- debug
 
         CMP     AH, 0x00
@@ -839,60 +839,6 @@ rSetCursol:
         CALL    rPopReg                 ; レジスタ取得
         RET
 
-; 画面をスクロール
-rSlideDisplay:
-        CALL    rPushReg                ; レジスタ退避
-
-        MOV     AH, 0x06
-        MOV     AL, 0x01
-        MOV     BH, 0x07
-        MOV     CX, 0x0000
-        MOV     DH, 24
-        MOV     DL, 79
-        INT     0x10
-
-        CALL    rPopReg                 ; レジスタ取得
-        RET
-
-; 次の文字の位置にカーソルを移動
-; in  : (なし)
-; out : (なし)
-rSetCursolNextCol:
-        CALL    rPushReg                ; レジスタ退避
-
-        ;MOV     AH, 0x02
-        ;MOV     BH, 0x00
-        ;MOV BYTE DL, [sXpos]
-        ;MOV BYTE DH, [sYpos]
-        ;INT     0x10
-
-        CALL    rSetCursol              ; カーソル表示更新
-
-        CALL    rPopReg                 ; レジスタ取得
-        RET
-
-
-; 改行(次の行の一番左にカーソルを移動)
-; in  : (なし)
-; out : (なし)
-rPutCR:
-        CALL    rPushReg                ; レジスタ退避
-
-        MOV BYTE [sXpos], 0x00          ; 一番左に
-        MOV BYTE AH, [sYpos]
-        CMP     AH, 24
-        JZ      .slideLine              ; すでに一番下なら1行ずれる
-        INC     AH
-        MOV BYTE [sYpos], AH            ; まだ下があるなら次へ
-        JMP     .setCursol
-.slideLine:
-        ;
-.setCursol:                             ; カーソル位置更新
-        CALL    rSetCursol
-
-        CALL    rPopReg                 ; レジスタ取得
-        RET
-
 ; シェル入力をディスプレイとバッファに格納する
 ; in  : (なし)
 ; out : AH      0: 続ける
@@ -900,92 +846,75 @@ rPutCR:
 ;               2: バッファオーバーフロー
 rOneLineInput:
         CALL    rPushReg                ; レジスタ退避
+        MOV BYTE [.aChar], 0x00         ; 戻り値設定
 
+        ; 入力から1文字取得 ---->
         MOV     AH, 0x00                ; 1文字取得
         INT     0x16
+        ; <---- 入力から1文字取得
 
+        ; 印字可能文字の判定 ---->
         CMP     AL, 0x0d                ; enterで終了
         JZ      .caseEnter
         CALL    libIsprint              ; 印字可能文字か判定
         CMP     AH, 0x00
         JZ      .caseNotEnter
+        ; <---- 印字可能文字の判定
+
+        ; 画面への反映 ---->
         CALL    libPutchar              ; 1文字出力
         JMP     .caseNotEnter
+        ; <---- 画面への反映
+
+        ; カーソル位置更新 ---->
 .caseEnter:                             ; enterを入力した場合
         CALL    libSetCursolNextLine    ; 改行用のカーソル移動
-        JMP     .next01
+        MOV BYTE [.aChar], 0x01         ; 戻り値設定
+        JMP     .exitLoutine            ; 格納せず終了
 .caseNotEnter:                          ; enter以外を入力した場合
         CALL    libSetCursolNextCol     ; 通常用のカーソル移動
-        JMP     .next01
-.next01:
+        MOV BYTE [.aChar], 0x00         ; 戻り値設定
+        JMP     .setBuf                 ; バッファに格納
+        ; <---- カーソル位置更新
+.setBuf:                                ; バッファに文字を格納する
         ; debug ---->
-        JMP     .exitLoutine
+        ;JMP     .exitLoutine
         ; <---- debug
-        CALL    libSetCursol
-.setChar:
-        MOV BYTE [.aChar], AL
 
-        CMP     AL, 0x0a
-        JNZ     .print
-        MOV BYTE [.aRet], 0x01
-        JMP     .exitLoutine
-
-.print:
-        CALL    libIsprint              ; 印字可能か判定
-        CMP     AH, 0x00
-        JZ      .exitLoutine            ; 印字不可ならなにもしない
-
-        MOV     AX, 0x0000              ; バッファに格納
-        MOV     ES, AX
+        ; セグメント設定 ---->
+        PUSH    DS
+        MOV     AX, 0x0000              ; debug
         MOV     DS, AX
-        MOV     SS, AX
-        MOV     AX, sOneLineBuf
-        ADD     AX, [sOneLineSeek]
-        MOV     BP, AX
-        INC     AX
-        MOV WORD [sOneLineSeek], AX
-        MOV BYTE AL, [.aChar]
-        MOV BYTE [ES:BP], AL  
+        ; <---- セグメント設定
 
-        MOV     AX, 0x0000              ; ディスプレイに表示
-        MOV     ES, AX
-        MOV     BP, .aChar
-        MOV     AH, 0x13
-        MOV     AL, 0x01
-        MOV     BH, 0x00
-        MOV BYTE BL, [sColorNormal]     ; 文字色
-        MOV     CX, 0x0001
-        MOV BYTE DL, [sXpos]
-        MOV BYTE DH, [sYpos]
-        INT     0x10
+        ; バッファに格納 ---->
+        MOV     AX, 0x40f1
+        MOV     DI, AX
+        ;MOV     DI, sOneLineBuf         ; 配列の先頭ポインタ
+       ; ADD WORD DI, [sOneLineSeek]     ; 配列のオフセット
+        ;ADD WORD DI, 0x4000
+        MOV BYTE AH, [.aRet]
+        MOV BYTE [DS:DI], AH            ; 格納
+        ; <---- バッファに格納
 
-        INC BYTE [sXpos]                ; カーソル位置計算
-        CMP BYTE [sXpos], 80
-        JNZ     .next
-        MOV BYTE [sXpos], 0x00
-        INC BYTE [sYpos]
-        CMP BYTE [sYpos], 25
-        JNZ     .next
-        MOV BYTE [sYpos], 24
+        ; オフセットシーク ---->
+        MOV WORD CX, [sOneLineSeek]
+        INC     CX
+        MOV WORD [sOneLineSeek], CX
+        ; <---- オフセットシーク
 
-        MOV BYTE [.aRet], 0x00
+        ; セグメント戻す ---->
+        POP     DS
+        ; <---- セグメント戻す
         
-        ;MOV     AH, 0x06               ; 80列目に印字するとBIOS側でスクロールしてくれるらしい
-        ;MOV     AL, 0x01
-        ;MOV     BH, 0x07
-        ;MOV     CX, 0x0000
-        ;MOV     DH, 24
-        ;MOV     DL, 79
-        ;INT     0x10
-.next:
-        CALL    rSetCursol              ; カーソル位置更新
+        JMP     .exitLoutine
 .exitLoutine:
         CALL    rPopReg                 ; レジスタ取得
         MOV BYTE AH, [.aRet]
         RET
-.aChar:
+.aChar:                                 ; 取得文字
         DB      0x00
-.aRet:
+.aRet:                                  ; 戻り値
         DB      0x00
 
 ; 入力バッファをクリアする
