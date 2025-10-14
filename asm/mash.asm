@@ -732,14 +732,20 @@ libSlideDisp:
 libSetCursolNextCol:
         CALL    rPushReg                ; レジスタ退避
 
-        ;MOV     AH, 0x02
-        ;MOV     BH, 0x00
-        ;MOV BYTE DL, [sXpos]
-        ;MOV BYTE DH, [sYpos]
-        ;INT     0x10
+        MOV BYTE AH, [sXpos]            ; 取得
+        MOV BYTE AL, [sYpos]
 
+        CMP     AH, DISP_COLSIZE
+        JZ      .newLine
+
+        INC     AH
+        MOV BYTE [sXpos], AH            ; 設定
+        MOV BYTE [sYpos], AL
         CALL    rSetCursol              ; カーソル表示更新
-
+        JMP     .next
+.newLine:
+        CALL    libSetCursolNextLine
+.next:
         CALL    rPopReg                 ; レジスタ取得
         RET
 
@@ -747,15 +753,26 @@ libSetCursolNextCol:
 libSetCursolNextLine:
         CALL    rPushReg                ; レジスタ退避
 
-        MOV BYTE [sXpos], 0x00          ; 一番左に
-        MOV BYTE AH, [sYpos]
-        CMP     AH, 24
-        JZ      .slideLine              ; すでに一番下なら1行ずれる
-        INC     AH
-        MOV BYTE [sYpos], AH            ; まだ下があるなら次へ
+        MOV BYTE AH, [sXpos]            ; 取得
+        MOV BYTE AL, [sYpos]
+
+        CMP     AL, DISP_LINESIZE
+        JNZ     .nextLine               ; 一番下じゃないなら普通の改行
+        CMP     AH, DISP_COLSIZE
+        JNZ     .slideLine              ; 一番右じゃないならスクロール(79列目に出力するとBIOS側でスクロールする)
+        JMP     .nonSlide
+.nextLine:
+        MOV     AH, 0x00
+        INC     AL
+
+        MOV BYTE [sXpos], AH            ; 設定
+        MOV BYTE [sYpos], AL
         JMP     .setCursol
 .slideLine:
         CALL    libSlideDisp
+.nonSlide:
+        MOV BYTE [sXpos], 0x00          ; 設定
+        MOV BYTE [sYpos], DISP_LINESIZE
 .setCursol:                             ; カーソル位置更新
         CALL    rSetCursol
 
@@ -764,8 +781,38 @@ libSetCursolNextLine:
 
 ; //////////////////////////////////////////////////////////////////////////// ;
 ; stdio.h                                                                      ;
-;       libPutc                                                                ;
+;       libPutchar
 ; //////////////////////////////////////////////////////////////////////////// ;
+
+; 1文字出力
+; static変数の座標を参照する
+; putchar(c89) 相当
+; in  : AL      asciiコード
+; out : (なし)
+libPutchar:
+        CALL    rPushReg                ; レジスタ退避
+        PUSH    ES
+
+        MOV BYTE [.aChar], AL
+
+        MOV     AX, 0x0000
+        MOV     ES, AX
+        MOV     AH, 0x13
+        MOV     AL, 0x00
+        MOV     BH, 0x00
+        MOV BYTE BL, [sColorNormal]
+        MOV     CX, 0x0001
+        MOV BYTE DL, [sXpos]
+        MOV BYTE DH, [sYpos]
+        MOV     BP, .aChar
+        INT     0x10
+
+        POP     ES
+        CALL    rPopReg                 ; レジスタ取得
+        RET
+.aChar:                                 ; 表示文字
+        DB      0x00
+
 
 ; //////////////////////////////////////////////////////////////////////////// ;
 ; --- サブルーチン ---
@@ -858,16 +905,22 @@ rOneLineInput:
         INT     0x16
 
         CMP     AL, 0x0d                ; enterで終了
-        JNZ     .libPutc
+        JZ      .caseEnter
+        CALL    libIsprint              ; 印字可能文字か判定
+        CMP     AH, 0x00
+        JZ      .caseNotEnter
+        CALL    libPutchar              ; 1文字出力
+        JMP     .caseNotEnter
 .caseEnter:                             ; enterを入力した場合
         CALL    libSetCursolNextLine    ; 改行用のカーソル移動
         JMP     .next01
-
 .caseNotEnter:                          ; enter以外を入力した場合
         CALL    libSetCursolNextCol     ; 通常用のカーソル移動
         JMP     .next01
-
 .next01:
+        ; debug ---->
+        JMP     .exitLoutine
+        ; <---- debug
         CALL    libSetCursol
 .setChar:
         MOV BYTE [.aChar], AL
