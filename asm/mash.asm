@@ -150,12 +150,9 @@ mashLoop:
         CALL    libSetCursolNextLine    ; 改行
         CALL    rOneLineClear           ; バッファクリア
 .inputLoop:
-        CALL    rOneLineInput           ; キーボード入力 → バッファ+出力
-        CMP     AH, 0x00
-
-; debug ---->
-; in  : AX      ダンプするバイト数
-;     : DS:DI   ダンプ開始アドレス
+        ; debug ---->
+        ; in  : AX      ダンプするバイト数
+        ;     : DS:DI   ダンプ開始アドレス
         MOV     AX, 0x0000
         MOV     DS, AX
         MOV     AX, 0x0010
@@ -167,10 +164,21 @@ mashLoop:
         ;MOV     AX, 0x0010
         ;MOV     DI, sOneLineBuf+250
         ;CALL    dbgDump
-; <---- debug
+        ; <---- debug
 
+        CALL    rOneLineInput           ; キーボード入力 → バッファ+出力
+        ;PUSH    AX
+        ;POP     AX
         CMP     AH, 0x00
-        JZ      .inputLoop
+        JZ      .inputLoop              ; 続ける
+
+.parseBuf:
+        MOV     AX, 0x0000
+        MOV     SS, AX
+        MOV     BP, sOneLineBuf
+        CALL    libPuts
+        CALL    rOneLineClear
+        JMP     .inputLoop
 
         ;CALL    rPutCR                  ; 改行
         ;MOV     AX, 0x0000
@@ -781,7 +789,7 @@ libSetCursolNextLine:
 
 ; //////////////////////////////////////////////////////////////////////////// ;
 ; stdio.h                                                                      ;
-;       libPutchar
+;       libPutchar      libPuts         libsParse       libsPrintf             ;
 ; //////////////////////////////////////////////////////////////////////////// ;
 
 ; 1文字出力
@@ -813,6 +821,49 @@ libPutchar:
 .aChar:                                 ; 表示文字
         DB      0x00
 
+; 文字列出力(エスケープシーケンスなし)
+; \0 (0x00) を確認し次第改行して終了
+; puts(c89) 相当
+; in  : SS:BP   表示する文字列ポインタ
+; out : なし
+libPuts:
+        CALL    rPushReg                ; レジスタ退避
+
+        ;MOV     AX, 0x0000
+        ;MOV     SS, AX
+.chk:
+        ; 1文字取得 ---->
+        MOV BYTE AL, [SS:BP]
+        CMP     AL, 0x00
+        JZ      .nextLine
+        JMP     .put
+        ; <---- 1文字取得
+
+.put:
+        CALL    libPutchar
+        CALL    libSetCursolNextCol
+
+        INC     BP
+        JMP     .chk
+
+        ; 改行
+.nextLine:
+        CALL    libSetCursolNextLine
+
+        CALL    rPopReg                 ; レジスタ取得
+        RET
+
+libsParse:
+        CALL    rPushReg                ; レジスタ退避
+        
+        CALL    rPopReg                 ; レジスタ取得
+        RET
+
+libsPrintf:
+        CALL    rPushReg                ; レジスタ退避
+        
+        CALL    rPopReg                 ; レジスタ取得
+        RET
 
 ; //////////////////////////////////////////////////////////////////////////// ;
 ; --- サブルーチン ---
@@ -862,6 +913,7 @@ rOneLineInput:
         ; <---- 印字可能文字の判定
 
         ; 画面への反映 ---->
+        MOV BYTE [.aChar], AL
         CALL    libPutchar              ; 1文字出力
         JMP     .caseNotEnter
         ; <---- 画面への反映
@@ -869,11 +921,11 @@ rOneLineInput:
         ; カーソル位置更新 ---->
 .caseEnter:                             ; enterを入力した場合
         CALL    libSetCursolNextLine    ; 改行用のカーソル移動
-        MOV BYTE [.aChar], 0x01         ; 戻り値設定
+        MOV BYTE [.aRet], 0x01         ; 戻り値設定
         JMP     .exitLoutine            ; 格納せず終了
 .caseNotEnter:                          ; enter以外を入力した場合
         CALL    libSetCursolNextCol     ; 通常用のカーソル移動
-        MOV BYTE [.aChar], 0x00         ; 戻り値設定
+        MOV BYTE [.aRet], 0x00         ; 戻り値設定
         JMP     .setBuf                 ; バッファに格納
         ; <---- カーソル位置更新
 .setBuf:                                ; バッファに文字を格納する
@@ -882,19 +934,17 @@ rOneLineInput:
         ; <---- debug
 
         ; セグメント設定 ---->
-        PUSH    DS
+        PUSH    SS
         MOV     AX, 0x0000              ; debug
-        MOV     DS, AX
+        MOV     SS, AX
         ; <---- セグメント設定
 
         ; バッファに格納 ---->
-        MOV     AX, 0x40f1
-        MOV     DI, AX
-        ;MOV     DI, sOneLineBuf         ; 配列の先頭ポインタ
-       ; ADD WORD DI, [sOneLineSeek]     ; 配列のオフセット
-        ;ADD WORD DI, 0x4000
-        MOV BYTE AH, [.aRet]
-        MOV BYTE [DS:DI], AH            ; 格納
+        MOV     AX, sOneLineBuf
+        ADD WORD AX, [sOneLineSeek]     ; 配列のオフセット
+        MOV     BP, AX
+        MOV BYTE AH, [.aChar]
+        MOV BYTE [SS:BP], AH            ; 格納
         ; <---- バッファに格納
 
         ; オフセットシーク ---->
@@ -904,7 +954,7 @@ rOneLineInput:
         ; <---- オフセットシーク
 
         ; セグメント戻す ---->
-        POP     DS
+        POP     SS
         ; <---- セグメント戻す
         
         JMP     .exitLoutine
@@ -937,7 +987,7 @@ rOneLineClear:
         JNZ     .clearLoop
 
         MOV WORD [sOneLineSeek], 0x0000 ; バッファシークリセット
-        MOV WORD DI, [sOneLineBuf]
+        ;MOV WORD DI, [sOneLineBuf]
 
         CALL    rPopReg                 ; レジスタ取得
         RET
