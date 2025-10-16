@@ -147,8 +147,15 @@ mashInit:
 ; //////////////////////////////////////////////////////////////////////////// ;
 
 mashLoop:
-        CALL    libSetCursolNextLine    ; 改行
-        CALL    rOneLineClear           ; バッファクリア
+        ;CALL    libSetCursolNextLine    ; 改行
+        ;CALL    rOneLineClear           ; 
+        
+        MOV     AL, "\"
+        CALL    libPutchar
+        CALL    libSetCursolNextCol
+        MOV     AL, ">"
+        CALL    libPutchar
+        CALL    libSetCursolNextCol
 .inputLoop:
         ; debug ---->
         ; in  : AX      ダンプするバイト数
@@ -177,8 +184,9 @@ mashLoop:
         MOV     SS, AX
         MOV     BP, sOneLineBuf
         CALL    libPuts
+        CALL    libsParse
         CALL    rOneLineClear
-        JMP     .inputLoop
+        JMP     mashLoop
 
         ;CALL    rPutCR                  ; 改行
         ;MOV     AX, 0x0000
@@ -853,9 +861,104 @@ libPuts:
         CALL    rPopReg                 ; レジスタ取得
         RET
 
+; 文字列出力(エスケープシーケンスあり)
+; \0 (0x00) を確認し次第改行して終了
+; '\'を確認し次第エスケープシーケンス確認
+; puts(c89) 相当
+; in  : SS:BP   表示する文字列ポインタ
+; out : なし
 libsParse:
-        CALL    rPushReg                ; レジスタ退避
-        
+        CALL    rPushReg                ; レジスタ退避   
+.chk:
+        ; 1文字取得 ---->
+        MOV BYTE AL, [SS:BP]
+        CMP     AL, 0x00
+        JZ      .nextLine
+        JMP     .put
+        ; <---- 1文字取得
+
+.put:
+        CMP     AL, "\"
+        JZ      .parse
+.print:
+        CALL    libPutchar
+        CALL    libSetCursolNextCol
+
+        INC     BP
+        JMP     .chk
+.parse:
+        INC     BP
+        MOV BYTE AL, [SS:BP]            ; '\'の次の1文字を取得
+
+        ; \b: バックスペース
+.bs:
+        CMP     AL, "b"
+        JNZ     .tab
+        MOV BYTE AH, [sXpos]
+        CMP     AH, 0x00
+        JZ      .bsNext
+        DEC     AH
+        MOV BYTE [sXpos], AH
+.bsNext:
+        MOV     AL, " "
+        CALL    libPutchar
+
+        JMP     .parseend
+
+        ; \t: タブ
+.tab:
+        CMP     AL, "t"
+        JNZ     .lf
+.tabLoop:
+        MOV BYTE AH, [sXpos]
+        AND     AH, 0x07
+        CMP     AH, 0x00
+        JZ      .tabNext
+
+        MOV     AL, " "
+        CALL    libPutchar
+        CALL    libSetCursolNextCol
+        JMP     .tabLoop
+.tabNext:
+        JMP     .parseend
+
+        ; \n: 改行
+.lf:
+        CMP     AL, "n"
+        JNZ     .cr
+        CALL    libSetCursolNextLine
+
+        JMP     .parseend
+
+        ; \r: キャリッジリターン
+.cr:
+        CMP     AL, "r"
+        JNZ     .bslash
+        MOV BYTE [sXpos], 0x00
+        JMP     .parseend
+
+        ; \\: バックスラッシュ
+.bslash:
+        CMP     AL, "\"
+        JNZ     .null
+
+        MOV     AL, "\"
+        CALL    libPutchar
+        CALL    libSetCursolNextCol
+
+        JMP     .parseend
+
+        ; 0x00: 出力中断
+.null:
+        CMP     AL, 0x00
+        JNZ     .nextLine
+.parseend:
+        INC     BP
+        JMP     .chk
+
+        ; 改行
+.nextLine:
+        CALL    libSetCursolNextLine
         CALL    rPopReg                 ; レジスタ取得
         RET
 
