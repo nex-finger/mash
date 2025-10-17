@@ -182,9 +182,17 @@ mashLoop:
 .parseBuf:
         MOV     AX, 0x0000
         MOV     SS, AX
+
+        MOV     BP, .aTestPuts
+        CALL    libPuts
         MOV     BP, sOneLineBuf
         CALL    libPuts
+
+        MOV     BP, .aTestsParse
+        CALL    libPuts
+        MOV     BP, sOneLineBuf
         CALL    libsParse
+
         CALL    rOneLineClear
         JMP     mashLoop
 
@@ -202,7 +210,10 @@ mashLoop:
         ;CALL    sysEcho
         
         JMP     mashLoop                ; 永遠にループする
-.sAllow:
+.aTestPuts:
+        DB      "puts", 0x00
+.aTestsParse:
+        DB      "sparse", 0x00
 
 ; //////////////////////////////////////////////////////////////////////////// ;
 ; --- ビルトインコマンド ---
