@@ -1,6 +1,9 @@
 ; mash
 ; TAB=4
 
+; memo
+; 実機で動かす場合相手側のシリアルポートと接続しないと動作がとても遅くなるので注意！
+
 ; ロゴ
 ; https://jp.mathworks.com/matlabcentral/fileexchange/181715-makebanner-big-ascii-style-comment-generator
 
@@ -178,13 +181,40 @@ mashLoop:
         ;POP     AX
         CMP     AH, 0x00
         JZ      .inputLoop              ; 続ける
-
 .parseBuf:
         MOV     AX, 0x0000
-        MOV     SS, AX
+
+        MOV     CX, 0x0100              ; メモリ確保
+        CALL    sysMalloc
+
+        MOV     AX, 0x0000
+        MOV     DS, AX
+        MOV     SI, .aTestPuts
+
+        MOV     AX, SS
+        MOV     ES, AX
+        MOV     DI, BP
+
+        MOV     CX, 0x0100
+
+        CALL    libMemcpy
+
+        MOV     AX, ES
+        MOV     DS, AX
+        MOV     BP, DI
+
+;.__t:
+        ;JMP     .__t
+
+        ; in  : DS      コピー元のセグメント
+        ;     : SI      コピー元のアドレス
+        ;     : CX      コピーするサイズ
+        ; out : ES      コピー先のセグメント
+        ;     : DI      コピー先のアドレス
 
         MOV     BP, .aTestPuts
         CALL    libPuts
+
         MOV     BP, sOneLineBuf
         CALL    libPuts
 
@@ -422,389 +452,43 @@ sysPutChar:
 ; ╚══════╝╚═╝╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝   
 ; //////////////////////////////////////////////////////////////////////////// ;
 
-; //////////////////////////////////////////////////////////////////////////// ;
-; ctype.h(c89)                                                                 ;
-;       libIsalnum      libIsAlpha      libIsblank      libIscntrl             ;
-;       libIsdigit      libIsgraph      libIslower      libIsprint             ;
-;       libIspuct       libIsspace      libIsupper      libIsxdigit            ;
-;       libTolower      libToupper                                             ;
-; //////////////////////////////////////////////////////////////////////////// ;
+; 文字分類マクロ
+; type.asm
+%include        "../asm/lib/type.asm"
 
-; 英大文字か判定
-; isupper(c89) 相当
-; in  : AL      asciiコード
-; out : AH      0: 大文字以外
-;               0以外: 大文字
-libIsupper:
-        CMP     AL, 0x41                ; A
-        JB      .ng                     ; AL < 'A' ならNG
-        CMP     AL, 0x5a                ; Z
-        JA      .ng                     ; AL > 'Z' ならNG
-.ok:
-        MOV     AH, 0x01                ; OKなら 1 を返却
-        JMP     .exit
-.ng:
-        MOV     AH, 0x00                ; NGなら 0 を返却
-        JMP     .exit
-.exit:
-        RET
+; 画面カーソル制御マクロ
+; cursol.asm
+%include        "../asm/lib/cursol.asm"
 
-; 英小文字か判定
-; isupper(c89) 相当
-; in  : AL      asciiコード
-; out : AH      0: 小文字以外
-;               0以外: 小文字
-libIslower:
-        CMP     AL, 0x61                ; a
-        JB      .ng                     ; AL < 'a' ならNG
-        CMP     AL, 0x7a                ; z
-        JA      .ng                     ; AL > 'z' ならNG
-.ok:
-        MOV     AH, 0x01                ; OKなら 1 を返却
-        JMP     .exit
-.ng:
-        MOV     AH, 0x00                ; NGなら 0 を返却
-        JMP     .exit
-.exit:
-        RET
+; 配列操作マクロ
 
-; 数字か判定
-; isdigit(c89) 相当
-; in  : AL      asciiコード
-; out : AH      0: 小文字以外
-;               0以外: 小文字
-libIsdigit:
-        CMP     AL, 0x30                ; 0
-        JB      .ng                     ; AL < '0' ならNG
-        CMP     AL, 0x39                ; 9
-        JA      .ng                     ; AL > '9' ならNG
-.ok:
-        MOV     AH, 0x01                ; OKなら 1 を返却
-        JMP     .exit
-.ng:
-        MOV     AH, 0x00                ; NGなら 0 を返却
-        JMP     .exit
-.exit:
-        RET
-
-; 空白文字を含む表示文字か判定
-; isprint(c89) 相当
-; in  : AL      asciiコード
-; out : AH      0: 表示文字以外
-;               0以外: 表示文字
-libIsprint:
-        CMP     AL, 0x20
-        JB      .ng                     ; AL < 0x20 ならNG
-        CMP     AL, 0x7e
-        JA      .ng                     ; AL > 0x7e ならNG
-.ok:
-        MOV     AH, 0x01                ; OKなら 1 を返却
-        JMP     .exit
-.ng:
-        MOV     AH, 0x00                ; NGなら 0 を返却
-        JMP     .exit
-.exit:
-        RET
-
-; 空白文字を除く表示文字か判定
-; isprint(c89) 相当
-; in  : AL      asciiコード
-; out : AH      0: 表示文字以外
-;               0以外: 表示文字
-libIsgraph:
-        CMP     AL, 0x21
-        JB      .ng                     ; AL < 0x21 ならNG
-        CMP     AL, 0x7e
-        JA      .ng                     ; AL > 0x7e ならNG
-.ok:
-        MOV     AH, 0x01                ; OKなら 1 を返却
-        JMP     .exit
-.ng:
-        MOV     AH, 0x00                ; NGなら 0 を返却
-        JMP     .exit
-.exit:
-        RET
-
-; ブランク文字か判定
-; isblank(c89) 相当
-; in  : AL      asciiコード
-; out : AH      0: ブランク文字以外
-;               0以外: ブランク文字
-libIsblank:
-        CMP     AL, 0x20                ; ' 'ならOK
-        JZ      .ok
-        CMP     AL, 0x09
-        JZ      .ok                     ; '\t'ならOK
-        JMP     .ng
-.ok:
-        MOV     AH, 0x01                ; OKなら 1 を返却
-        JMP     .exit
-.ng:
-        MOV     AH, 0x00                ; NGなら 0 を返却
-        JMP     .exit
-.exit:
-        RET
-
-; 空白類文字か判定
-; isspace(c89) 相当
-; in  : AL      asciiコード
-; out : AH      0: 空白類文字以外
-;               0以外: 空白類文字
-libIsspace:
-        CMP     AL, 0x09
-        JZ      .ok                     ; '\t'ならOK
-        CMP     AL, 0x0a
-        JZ      .ok                     ; '\n'ならOK
-        CMP     AL, 0x0b
-        JZ      .ok                     ; '\v'ならOK
-        CMP     AL, 0x0c
-        JZ      .ok                     ; '\f'ならOK
-        CMP     AL, 0x0d
-        JZ      .ok                     ; '\r'ならOK
-        CMP     AL, 0x20
-        JZ      .ok                     ; ' 'ならOK
-        JMP     .ng
-.ok:
-        MOV     AH, 0x01                ; OKなら 1 を返却
-        JMP     .exit
-.ng:
-        MOV     AH, 0x00                ; NGなら 0 を返却
-        JMP     .exit
-.exit:
-        RET
-
-; 制御文字か判定
-; iscntrl(c89) 相当
-; in  : AL      asciiコード
-; out : AH      0: 制御文字以外
-;               0以外: 制御文字
-libIscntrl:
-        CMP     AL, 0x7f
-        JZ      .ok                     ; '\del'ならOK
-        CMP     AL, 0x00
-        JB      .ng                     ; AL < 0x00 ならNG
-        CMP     AL, 0x1f
-        JA      .ng                     ; AL > 0x1f ならNG
-.ok:
-        MOV     AH, 0x01                ; OKなら 1 を返却
-        JMP     .exit
-.ng:
-        MOV     AH, 0x00                ; NGなら 0 を返却
-        JMP     .exit
-.exit:
-        RET 
-
-; 16進数字か判定
-; isxdigit(c89) 相当
-; in  : AL      asciiコード
-; out : AH      0: 16進文字以外
-;               0以外: 16進文字
-libIsxdigit:
-        CMP     AL, 0x30                ; 0
-        JB      .next1                  ; AL < '0' ならNG
-        CMP     AL, 0x39                ; 9
-        JA      .next1                  ; AL > '9' ならNG
-        JMP     .ok
-.next1:
-        CMP     AL, 0x41                ; A
-        JB      .next2                  ; AL < 'A' ならNG
-        CMP     AL, 0x46                ; F
-        JA      .next2                  ; AL > 'F' ならNG
-        JMP     .ok
-.next2:
-        CMP     AL, 0x61                ; a
-        JB      .ng                     ; AL < 'a' ならNG
-        CMP     AL, 0x66                ; f
-        JA      .ng                     ; AL > 'f' ならNG
-        JMP     .ok
-.ok:
-        MOV     AH, 0x01                ; OKなら 1 を返却
-        JMP     .exit
-.ng:
-        MOV     AH, 0x00                ; NGなら 0 を返却
-        JMP     .exit
-.exit:
-        RET 
-
-; 英文字か判定
-; isalpha(c89) 相当
-; in  : AL      asciiコード
-; out : AH      0: 英文字以外
-;               0以外: 英文字
-libIsalpha:
-        CALL    libIsupper              ; 大文字か確認
-        CMP     AH, 0x00
-        JNZ     .ok
-        CALL    libIslower              ; 小文字か確認
-        CMP     AH, 0x00
-        JNZ     .ok
-        JMP     .ng
-.ok:
-        MOV     AH, 0x01                ; OKなら 1 を返却
-        JMP     .exit
-.ng:
-        MOV     AH, 0x00                ; NGなら 0 を返却
-        JMP     .exit
-.exit:
-        RET 
-
-; 英文字or数字か判定
-; isalnum(c89) 相当
-; in  : AL      asciiコード
-; out : AH      0: 英文字でも数字でもない
-;               0以外: 英文字or数字
-libIsalnum:
-        CALL    libIsupper              ; 大文字か確認
-        CMP     AH, 0x00
-        JNZ     .ok
-        CALL    libIslower              ; 小文字か確認
-        CMP     AH, 0x00
-        JNZ     .ok
-        CALL    libIsdigit              ; 数字か確認
-        CMP     AH, 0x00
-        JNZ     .ok
-        JMP     .ng
-.ok:
-        MOV     AH, 0x01                ; OKなら 1 を返却
-        JMP     .exit
-.ng:
-        MOV     AH, 0x00                ; NGなら 0 を返却
-        JMP     .exit
-.exit:
-        RET 
-
-; 区切り文字か判定(区切り文字 = (!(isalnum) & isgraph)
-; ispunct(c89) 相当
-; in  : AL      asciiコード
-; out : AH      0: 区切り文字以外
-;               0以外: 区切り文字
-libIspunct:
-        CALL    libIsalnum              ; 英文字or数字か確認
-        CMP     AH, 0x00
-        JNZ     .ng                     ; 英文字or数字ならNG
-        CALL    libIsgraph              ; 空白を除く印字可能文字か確認
-        CMP     AH, 0x00
-        JNZ     .ok                     ; 印字可能文字ならOK
-        JMP     .ng
-.ok:
-        MOV     AH, 0x01                ; OKなら 1 を返却
-        JMP     .exit
-.ng:
-        MOV     AH, 0x00                ; NGなら 0 を返却
-        JMP     .exit
-.exit:
-        RET
-
-; 大文字を小文字に変換
-; tolower(c89) 相当
-; in  : AL      asciiコード
-; out : AH      変換後asciiコード
-libTolower:
-        CALL    libIsupper              ; 大文字か判定
-        CMP     AH, 0x00
-        JZ      .exit                   ; 大文字ではないなら変換しない
-        ADD     AL, 0x20
-.exit:
-        MOV     AH, AL
-        RET
-
-; 小文字を大文字に変換
-; toupper(c89) 相当
-; in  : AL      asciiコード
-; out : AH      変換後asciiコード
-libToupper:
-        CALL    libIslower              ; 小文字か判定
-        CMP     AH, 0x00
-        JZ      .exit                   ; 小文字ではないなら変換しない
-        SUB     AL, 0x20
-.exit:
-        MOV     AH, AL
-        RET
-
-; //////////////////////////////////////////////////////////////////////////// ;
-; escseq.h                                                                     ;
-;       libSetCursol            libSlideDisp            libSetCursolNextCol    ;
-;       libSetCursolNextLine                                                   ;
-; //////////////////////////////////////////////////////////////////////////// ;
-
-; カーソル表示更新
-libSetCursol:
+; メモリのコピー
+; memcpy(c89相当)
+; in  : DS      コピー元のセグメント
+;     : SI      コピー元のアドレス
+;     : CX      コピーするサイズ
+; out : ES      コピー先のセグメント
+;     : DI      コピー先のアドレス
+libMemcpy:
         CALL    rPushReg                ; レジスタ退避
 
-        MOV     AH, 0x02
-        MOV     BH, 0x00
-        MOV BYTE DL, [sXpos]
-        MOV BYTE DH, [sYpos]
-        INT     0x10
+        CMP     CX, 0x0000              ; サイズチェック
+        JZ      .exit
 
+.moveLoop:
+        MOV BYTE AH, [DS:SI]
+        MOV BYTE [ES:DI], AH
+        INC     SI
+        INC     DI
+        DEC     CX
+        
+        CMP     CX, 0x0000
+        JNZ     .moveLoop
+
+.exit:
         CALL    rPopReg                 ; レジスタ取得
         RET
 
-; 画面表示を1行上に移動
-libSlideDisp:
-        CALL    rPushReg                ; レジスタ退避
-
-        MOV     AH, 0x06
-        MOV     AL, 0x01
-        MOV     BH, 0x07
-        MOV     CX, 0x0000
-        MOV     DH, 24
-        MOV     DL, 79
-        INT     0x10
-
-        CALL    rPopReg                 ; レジスタ取得
-        RET
-
-; カーソルを次の列へ
-libSetCursolNextCol:
-        CALL    rPushReg                ; レジスタ退避
-
-        MOV BYTE AH, [sXpos]            ; 取得
-        MOV BYTE AL, [sYpos]
-
-        CMP     AH, DISP_COLSIZE
-        JZ      .newLine
-
-        INC     AH
-        MOV BYTE [sXpos], AH            ; 設定
-        MOV BYTE [sYpos], AL
-        CALL    rSetCursol              ; カーソル表示更新
-        JMP     .next
-.newLine:
-        CALL    libSetCursolNextLine
-.next:
-        CALL    rPopReg                 ; レジスタ取得
-        RET
-
-; カーソルを次の行へ
-libSetCursolNextLine:
-        CALL    rPushReg                ; レジスタ退避
-
-        MOV BYTE AH, [sXpos]            ; 取得
-        MOV BYTE AL, [sYpos]
-
-        CMP     AL, DISP_LINESIZE
-        JNZ     .nextLine               ; 一番下じゃないなら普通の改行
-        CMP     AH, DISP_COLSIZE
-        JNZ     .slideLine              ; 一番右じゃないならスクロール(79列目に出力するとBIOS側でスクロールする)
-        JMP     .nonSlide
-.nextLine:
-        MOV     AH, 0x00
-        INC     AL
-
-        MOV BYTE [sXpos], AH            ; 設定
-        MOV BYTE [sYpos], AL
-        JMP     .setCursol
-.slideLine:
-        CALL    libSlideDisp
-.nonSlide:
-        MOV BYTE [sXpos], 0x00          ; 設定
-        MOV BYTE [sYpos], DISP_LINESIZE
-.setCursol:                             ; カーソル位置更新
-        CALL    rSetCursol
-
-        CALL    rPopReg                 ; レジスタ取得
-        RET
 
 ; //////////////////////////////////////////////////////////////////////////// ;
 ; stdio.h                                                                      ;
@@ -843,7 +527,7 @@ libPutchar:
 ; 文字列出力(エスケープシーケンスなし)
 ; \0 (0x00) を確認し次第改行して終了
 ; puts(c89) 相当
-; in  : SS:BP   表示する文字列ポインタ
+; in  : DS:BP   表示する文字列ポインタ
 ; out : なし
 libPuts:
         CALL    rPushReg                ; レジスタ退避
@@ -852,7 +536,7 @@ libPuts:
         ;MOV     SS, AX
 .chk:
         ; 1文字取得 ---->
-        MOV BYTE AL, [SS:BP]
+        MOV BYTE AL, [DS:BP]
         CMP     AL, 0x00
         JZ      .nextLine
         JMP     .put
@@ -1340,7 +1024,10 @@ dbgDump:
         CMP WORD CX, [.byteCnt]
         JNZ     .dumpLoop
 
-        MOV     AL, 0x0a                ; 改行文字
+        MOV     AL, 0x0d                ; \r
+        CALL    .putchar
+
+        MOV     AL, 0x0a                ; \n
         CALL    .putchar
 
         CALL    rPopReg                 ; レジスタ取得

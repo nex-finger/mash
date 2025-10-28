@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <ctype.h>
 
 /* 変数の連結リスト */
 typedef struct node
@@ -18,6 +19,41 @@ void getNode(Node *head, char *name);
 void listNode(Node *head);
 
 static Node *sNode = NULL;
+
+/* トークン切り */
+void myToken(char *inP, char *outP)
+{
+    char *aIn = inP;
+    char *aOut = outP;
+    while(1)
+    {   /* 区切り文字ではなくなるまで読み飛ばし */
+        if(ispunct(*aIn) == 0)
+        {
+            aIn++;
+        }
+        else
+        {
+            break;
+        }
+    }
+    
+    outP = aOut;
+
+    while(1)
+    {   /* 区切り文字が来るまで格納 */
+        if(ispunct(*aIn) != 0)
+        {
+            *outP = *inP;
+            aOut++;
+            aIn++;
+        }
+        else
+        {
+            *outP = 0x00;
+            break;
+        }
+    }
+}
 
 /* 変数の新規作成 */
 void newNode(Node **head, char *name, unsigned short data)
@@ -52,51 +88,32 @@ void listNode(Node *head)
 /* エントリポイント */
 int main(void)
 {
-    char aCommand;
+    char aCommand[256];
     char aName[8];
     unsigned short aData;
 
+    int i;
+    char _tmpc;
+
     while(1)
     {
-        scanf(" %c", &aCommand);
-
-        if(aCommand == 'n')
-        {   /* new */
-            puts("new, name?");
-            scanf("%s", aName);
-
+        i = 0;
+        while(1)
+        {
+            scanf("%c", &_tmpc);
+            if(_tmpc != '\n')
+            {
+                aCommand[i] = _tmpc;
+                i++;
+            }
+            else
+            {
+                aCommand[i] = 0x00;
+                break;
+            }
         }
-        else if(aCommand == 'f')
-        {   /* free */
-            puts("free, name?");
-            scanf("%s", aName);
 
-        }
-        else if(aCommand == 's')
-        {   /* set */
-            puts("set, name? data?");
-            scanf("%s", aName);
-            scanf("%d", &aData);
-
-            printf("%s %d\n", aName, aData);
-
-        }
-        else if(aCommand == 'g')
-        {   /* get */
-            puts("get, name?");
-            scanf("%s", aName);
-
-        }
-        else if(aCommand == 'l')
-        {   /* list */
-            puts("list");
-
-        }
-        else
-        {   /* end */
-            puts("end");
-            break;
-        }
+        printf("%s\n", aCommand);
     }
 
     return 0;
