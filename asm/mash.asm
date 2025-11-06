@@ -184,24 +184,21 @@ mashLoop:
 .parseBuf:
         MOV     AX, 0x0000
 
-        MOV     CX, 0x0100              ; メモリ確保
-        CALL    sysMalloc
+        ;MOV     AX, 0x0000
+        ;MOV     DS, AX
+        ;MOV     SI, .aTestPuts
 
-        MOV     AX, 0x0000
-        MOV     DS, AX
-        MOV     SI, .aTestPuts
+        ;MOV     AX, SS
+        ;MOV     ES, AX
+        ;MOV     DI, BP
 
-        MOV     AX, SS
-        MOV     ES, AX
-        MOV     DI, BP
+        ;MOV     CX, 0x0100
 
-        MOV     CX, 0x0100
+        ;CALL    libMemcpy
 
-        CALL    libMemcpy
-
-        MOV     AX, ES
-        MOV     DS, AX
-        MOV     BP, DI
+        ;MOV     AX, ES
+        ;MOV     DS, AX
+        ;MOV     BP, DI
 
 ;.__t:
         ;JMP     .__t
@@ -212,17 +209,33 @@ mashLoop:
         ; out : ES      コピー先のセグメント
         ;     : DI      コピー先のアドレス
 
-        MOV     BP, .aTestPuts
+        ; puts
+        MOV     BP, .aTestPuts          ; 識別文字列
+        CALL    libPuts
+        MOV     BP, sOneLineBuf         ; 入力バッファ
         CALL    libPuts
 
-        MOV     BP, sOneLineBuf
+        ; sparse
+        MOV     BP, .aTestsParse        ; 識別文字列
         CALL    libPuts
-
-        MOV     BP, .aTestsParse
-        CALL    libPuts
-        MOV     BP, sOneLineBuf
+        MOV     BP, sOneLineBuf         ; 入力バッファ
         CALL    libsParse
 
+        ; malloc + puts
+        MOV     CX, 0x0100              ; メモリ確保
+        CALL    sysMalloc
+        PUSH    BP
+
+        PUSH    DS
+        MOV     AX, 0x1000
+        MOV     DS, AX
+        CALL    libPuts
+        POP     DS
+
+        POP     BP
+        CALL    sysFree
+
+        ; バッファクリア
         CALL    rOneLineClear
         JMP     mashLoop
 
