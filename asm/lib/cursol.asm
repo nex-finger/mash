@@ -64,12 +64,6 @@ libSetCursolNextCol:
 ; out : (なし)
 libSetCursolNextLine:
         CALL    rPushReg                ; レジスタ退避
-        PUSH    DS
-        PUSH    ES
-
-        MOV     AX, 0x0000
-        MOV     DS, AX
-        MOV     ES, AX
 
         MOV BYTE AH, [sXpos]            ; 取得
         MOV BYTE AL, [sYpos]
@@ -94,7 +88,5 @@ libSetCursolNextLine:
 .setCursol:                             ; カーソル位置更新
         CALL    rSetCursol
 
-        POP     ES
-        POP     DS
         CALL    rPopReg                 ; レジスタ取得
         RET

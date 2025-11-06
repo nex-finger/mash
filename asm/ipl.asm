@@ -38,7 +38,7 @@ iplEntry:
 		INT		0x10
 
 ; --- セカンダリローダ用意 ---
-		MOV		BX, 0x1000		; 0X01:8000に展開
+		MOV		BX, 0x0000		; 0x0000:8000に展開
 		MOV		ES, BX
 		MOV		BX, 0x8000
 		MOV		AH, 0x02
@@ -49,7 +49,7 @@ iplEntry:
 		MOV		DL, 0x00		; ドライブA
 		INT		0x13
 		JC		iplErr			; 失敗
-		JMP		0x1000:0x8000	; 成功
+		JMP		0x0000:0x8000	; 成功
 
 ; --- ロード失敗 ---
 iplErr:

@@ -153,7 +153,7 @@ mashLoop:
         ;CALL    libSetCursolNextLine    ; 改行
         ;CALL    rOneLineClear           ; 
         
-        MOV     AL, "\"
+        MOV     AL, "\"        
         CALL    libPutchar
         CALL    libSetCursolNextCol
         MOV     AL, ">"
@@ -163,9 +163,6 @@ mashLoop:
         ; debug ---->
         ; in  : AX      ダンプするバイト数
         ;     : DS:DI   ダンプ開始アドレス
-        MOV     AX, 0x0000
-        MOV     DS, AX
-        MOV     AX, 0x0010
         MOV     DI, sOneLineBuf-8
         CALL    dbgDump
 
@@ -226,11 +223,7 @@ mashLoop:
         CALL    sysMalloc
         PUSH    BP
 
-        PUSH    DS
-        MOV     AX, 0x1000
-        MOV     DS, AX
         CALL    libPuts
-        POP     DS
 
         POP     BP
         CALL    sysFree
@@ -308,18 +301,15 @@ sysEcho:
 ; 実際の確保は16バイト単位で行われる
 ; 一度に確保できるのは 4080(255* 16)バイト まで
 ;
-; アロケーションメモリ: 0x1000:0x0000 ~ 0x1000:0xffff
-; アロケーションテーブル: 0x0000:0x1000 ~ 0x0000:0x1fff
+; アロケーションメモリ: 0x0800 ~ 0x0fff
+; アロケーションテーブル: 0x8000 ~ 0xffff
 ;
 ; in  : CX      確保したいメモリ容量(バイト)
 ; out : AX      結果 0成功 1失敗
-;     : SS:BP   確保した先頭ポインタ(確保に成功した場合)
+;     : BP      確保した先頭ポインタ(確保に成功した場合)
 sysMalloc:
         CALL    rPushReg                ; レジスタ退避
-        PUSH    DS                      ; セグメント退避
 
-        MOV     AX, 0x0000              ; テーブルのセグメントは 0 、以後ルーチン脱出直前まで0のまま
-        MOV     DS, AX
         CMP     CX, 0x1000              ; 確保メモリ上限チェック
         JAE     .retError
         CMP     CX, 0x0000              ; 0バイトかチェック
@@ -327,12 +317,12 @@ sysMalloc:
         ADD     CX, 0x000f              ; 確保するブロック数(1ブロック16バイト) = (確保したいバイト + 15) /16
         SHR     CX, 0x04
         MOV BYTE [.aSize], CL
-        MOV WORD [.aFAdr], 0x1000       ; テーブルの先頭ポインタは 0x1000
+        MOV WORD [.aFAdr], 0x0800       ; テーブルの先頭ポインタは 0x0800
         MOV BYTE [.aCnt], 0x00
-        MOV WORD [.aRet], 0x1000
+        MOV WORD [.aRet], 0x0800
 .mallocLoop:
         MOV WORD DI, [.aFAdr]           ; シークしている番地が0か確認
-        MOV BYTE AH, [DS:DI]
+        MOV BYTE AH, [DI]
         CMP     AH, 0x00
         JZ      .cntChk
         MOV BYTE [.aCnt], 0x00         ; シーク番地が0ではないので連続数をリセット
@@ -342,7 +332,7 @@ sysMalloc:
         MOV WORD [.aRet], AX            ; シーク以前には確保できる領域がないため次へ
 .exitChk:
         MOV WORD AX, [.aFAdr]           ; テーブルの末尾まで行ったらもう見込みなし
-        CMP     AX, 0x2000              ; 末尾は 0x1fff
+        CMP     AX, 0x1000              ; 末尾は 0x0fff
         JNZ     .mallocLoop             ; 末尾ではないなら次の1バイトを
         JMP     .retError
 .cntChk:
@@ -367,8 +357,7 @@ sysMalloc:
         DEC     DI                      ; aFAdr--
         CMP     AH, CL                  ; 注文されたブロック数だけ書き込んだら終了
         JNZ     .fillLoop
-        MOV WORD AX, [.aRet]            ; 呼び出し元に返却するのは (連続空きブロックの先頭アドレス - 0X10000) * 16
-        SUB     AX, 0x1000
+        MOV WORD AX, [.aRet]            ; 呼び出し元に返却するのは (連続空きブロックの先頭アドレス) * 16
         SHL     AX, 0x04
         MOV WORD [.aRet], AX
         JMP     .return
@@ -377,7 +366,7 @@ sysMalloc:
 .return:
         CALL    rPopReg                 ; レジスタ取得
         MOV WORD BP, [.aRet]            ; 取得した先頭アドレスを格納
-        POP     DS                      ; mallocをコールする前のセグメントに戻す
+
         RET                             ; 呼び出し元へ     
 .aFAdr:                                 ; テーブル内シークアドレス
         DB      0x00, 0x00
@@ -399,23 +388,18 @@ sysMalloc:
 ; out : AX      結果 0成功 1失敗
 sysFree:
         CALL    rPushReg                ; レジスタ退避
-        PUSH    DS                      ; セグメント退避
-        MOV     DI, BP                  ; DI ← (BP / 16) + 0x1000
-
-        MOV     AX, 0x0000
-        MOV     DS, AX
+        MOV     DI, BP                  ; DI ← (BP / 16)
         SHR     DI, 0x04
-        ADD     DI, 0x1000
+
 .freeLoop:                              ; 確保した先頭まで戻る
-        MOV BYTE AH, [DS:DI]            ; sTbl[DI]
+        MOV BYTE AH, [DI]            ; sTbl[DI]
         CMP     AH, 0x00                ; 値が 0x00 なら異常メモリを入力している
         JZ      .next
-        MOV BYTE [DS:DI], 0x00
+        MOV BYTE [DI], 0x00
         INC     DI
         CMP     AH, 0x01                ; 値が 0x01 まで続ける
         JNZ     .freeLoop
 .next:
-        POP     DS                      ; セグメント戻す
         CALL    rPopReg                 ; レジスタ取得
         RET
 
@@ -489,8 +473,8 @@ libMemcpy:
         JZ      .exit
 
 .moveLoop:
-        MOV BYTE AH, [DS:SI]
-        MOV BYTE [ES:DI], AH
+        MOV BYTE AH, [SI]
+        MOV BYTE [DI], AH
         INC     SI
         INC     DI
         DEC     CX
@@ -515,12 +499,9 @@ libMemcpy:
 ; out : (なし)
 libPutchar:
         CALL    rPushReg                ; レジスタ退避
-        PUSH    ES
 
         MOV BYTE [.aChar], AL
 
-        MOV     AX, 0x0000
-        MOV     ES, AX
         MOV     AH, 0x13
         MOV     AL, 0x00
         MOV     BH, 0x00
@@ -531,7 +512,6 @@ libPutchar:
         MOV     BP, .aChar
         INT     0x10
 
-        POP     ES
         CALL    rPopReg                 ; レジスタ取得
         RET
 .aChar:                                 ; 表示文字
@@ -549,7 +529,7 @@ libPuts:
         ;MOV     SS, AX
 .chk:
         ; 1文字取得 ---->
-        MOV BYTE AL, [DS:BP]
+        MOV BYTE AL, [BP]
         CMP     AL, 0x00
         JZ      .nextLine
         JMP     .put
@@ -579,7 +559,7 @@ libsParse:
         CALL    rPushReg                ; レジスタ退避   
 .chk:
         ; 1文字取得 ---->
-        MOV BYTE AL, [SS:BP]
+        MOV BYTE AL, [BP]
         CMP     AL, 0x00
         JZ      .nextLine
         JMP     .put
@@ -596,7 +576,7 @@ libsParse:
         JMP     .chk
 .parse:
         INC     BP
-        MOV BYTE AL, [SS:BP]            ; '\'の次の1文字を取得
+        MOV BYTE AL, [BP]            ; '\'の次の1文字を取得
 
         ; \b: バックスペース
 .bs:
@@ -744,18 +724,12 @@ rOneLineInput:
         ;JMP     .exitLoutine
         ; <---- debug
 
-        ; セグメント設定 ---->
-        PUSH    SS
-        MOV     AX, 0x0000              ; debug
-        MOV     SS, AX
-        ; <---- セグメント設定
-
         ; バッファに格納 ---->
         MOV     AX, sOneLineBuf
         ADD WORD AX, [sOneLineSeek]     ; 配列のオフセット
         MOV     BP, AX
         MOV BYTE AH, [.aChar]
-        MOV BYTE [SS:BP], AH            ; 格納
+        MOV BYTE [BP], AH            ; 格納
         ; <---- バッファに格納
 
         ; オフセットシーク ---->
@@ -763,10 +737,6 @@ rOneLineInput:
         INC     CX
         MOV WORD [sOneLineSeek], CX
         ; <---- オフセットシーク
-
-        ; セグメント戻す ---->
-        POP     SS
-        ; <---- セグメント戻す
         
         JMP     .exitLoutine
 .exitLoutine:
@@ -784,14 +754,10 @@ rOneLineInput:
 rOneLineClear:
         CALL    rPushReg                ; レジスタ退避
 
-        MOV     AX, 0x0000
-        MOV     DS, AX
-        MOV     ES, AX
-        MOV     SS, AX
         MOV WORD DI, sOneLineBuf
         MOV     CX, 0x0000
 .clearLoop:                             ; 0埋め
-        MOV BYTE [DS:DI], 0x00
+        MOV BYTE [DI], 0x00
         INC     CX
         INC     DI
         CMP     CX, 0x0100
@@ -804,25 +770,20 @@ rOneLineClear:
         RET
 
 ; malloc 用のアロケーションメモリとアロケーションテーブルを初期化
-; アロケーションメモリ 0x10000 ~ 0x1ffff
-; アロケーションテーブル 0x01000 ~ 0x01fff
+; アロケーションメモリ 0x0800 ~ 0x0fff
+; アロケーションテーブル 0x8000 ~ 0xffff
 ; in  : なし
 ; out : なし
 rInitMalloc:
         CALL    rPushReg                ; レジスタ退避
 
-        MOV     AX, ES
-        PUSH    AX
-        MOV     AX, 0x0000
-        MOV     ES, AX
-        MOV     BP, 0x1000
+        MOV     BP, 0x0800
 .initLoop:
-        MOV BYTE [ES:BP], 0x00
+        MOV BYTE [BP], 0x00
         INC     BP
-        CMP     BP, 0x2000
+        CMP     BP, 0x1000
         JNZ     .initLoop
 
-        POP     AX
         MOV     ES, AX
 %ifdef __DEBUG
         ;MOV     CX, 0x0012              ; 動的確保テスト
@@ -856,7 +817,6 @@ rInitMalloc:
 cmdVer:
         CALL    rPushReg                ; レジスタ退避
         MOV     AX, 0x0000
-        MOV     SS, AX
         MOV     BP, cMashLogo           ; ロゴの表示
         MOV     CX, 0x0000
 .loophead:
@@ -872,8 +832,8 @@ cmdVer:
 
         ADD     BP, 35                  ; 1行35文字
         POP     CX                      ; ループ変数取得
-        MOV BYTE [DS:sXpos], 0x00
-        INC BYTE [DS:sYpos]
+        MOV BYTE [sXpos], 0x00
+        INC BYTE [sYpos]
         INC     CX
         CMP     CX, 0x0006
         JNZ     .loophead    
@@ -882,13 +842,13 @@ cmdVer:
         MOV     AH, 0x13                ; 版数の表示
         MOV     AL, 0x01
         MOV     BH, 0
-        MOV     BL, [DS:sColorNormal]
-        MOV     CX, [DS:cVersionLen]
-        MOV     DH, [DS:sYpos]
-        MOV     DL, [DS:sXpos]
+        MOV     BL, [sColorNormal]
+        MOV     CX, [cVersionLen]
+        MOV     DH, [sYpos]
+        MOV     DL, [sXpos]
         INT     0x10
-        MOV BYTE [DS:sXpos], 0x00
-        INC BYTE [DS:sYpos]
+        MOV BYTE [sXpos], 0x00
+        INC BYTE [sYpos]
         CALL    rPopReg                 ; レジスタ取得
         RET
         
