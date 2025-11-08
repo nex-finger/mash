@@ -1,5 +1,5 @@
 ; //////////////////////////////////////////////////////////////////////////// ;
-; cursol.asm                                                                     ;
+; cursol.asm                                                                   ;
 ;       libSetCursol            libSlideDisp            libSetCursolNextCol    ;
 ;       libSetCursolNextLine                                                   ;
 ; //////////////////////////////////////////////////////////////////////////// ;

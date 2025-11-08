@@ -223,6 +223,11 @@ mashLoop:
         CALL    sysMalloc
         PUSH    BP
 
+        MOV     SI, sOneLineBuf
+        MOV     DI, BP
+
+        CALL    libMemcpy
+
         CALL    libPuts
 
         POP     BP
@@ -461,11 +466,9 @@ sysPutChar:
 
 ; メモリのコピー
 ; memcpy(c89相当)
-; in  : DS      コピー元のセグメント
-;     : SI      コピー元のアドレス
+; in  : SI      コピー元のアドレス
 ;     : CX      コピーするサイズ
-; out : ES      コピー先のセグメント
-;     : DI      コピー先のアドレス
+; out : DI      コピー先のアドレス
 libMemcpy:
         CALL    rPushReg                ; レジスタ退避
 
