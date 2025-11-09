@@ -225,6 +225,7 @@ mashLoop:
 
         MOV     SI, sOneLineBuf
         MOV     DI, BP
+        MOV     CX, 0x0100
 
         CALL    libMemcpy
 
@@ -475,7 +476,7 @@ libMemcpy:
         CMP     CX, 0x0000              ; サイズチェック
         JZ      .exit
 
-.moveLoop:
+.fillLoop:
         MOV BYTE AH, [SI]
         MOV BYTE [DI], AH
         INC     SI
@@ -483,7 +484,7 @@ libMemcpy:
         DEC     CX
         
         CMP     CX, 0x0000
-        JNZ     .moveLoop
+        JNZ     .fillLoop
 
 .exit:
         CALL    rPopReg                 ; レジスタ取得
