@@ -464,32 +464,8 @@ sysPutChar:
 %include        "../asm/lib/cursol.asm"
 
 ; 配列操作マクロ
-
-; メモリのコピー
-; memcpy(c89相当)
-; in  : SI      コピー元のアドレス
-;     : CX      コピーするサイズ
-; out : DI      コピー先のアドレス
-libMemcpy:
-        CALL    rPushReg                ; レジスタ退避
-
-        CMP     CX, 0x0000              ; サイズチェック
-        JZ      .exit
-
-.fillLoop:
-        MOV BYTE AH, [SI]
-        MOV BYTE [DI], AH
-        INC     SI
-        INC     DI
-        DEC     CX
-        
-        CMP     CX, 0x0000
-        JNZ     .fillLoop
-
-.exit:
-        CALL    rPopReg                 ; レジスタ取得
-        RET
-
+; array.asm
+%include        "../asm/lib/array.asm"
 
 ; //////////////////////////////////////////////////////////////////////////// ;
 ; stdio.h                                                                      ;

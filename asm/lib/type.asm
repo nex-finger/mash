@@ -1,9 +1,19 @@
 ; //////////////////////////////////////////////////////////////////////////// ;
-; type.asm                                                                     ;
-;       libIsalnum      libIsAlpha      libIsblank      libIscntrl             ;
-;       libIsdigit      libIsgraph      libIslower      libIsprint             ;
-;       libIspuct       libIsspace      libIsupper      libIsxdigit            ;
-;       libTolower      libToupper                                             ;
+; type.asm
+;       libIsalnum
+;       libIsAlpha
+;       libIsblank
+;       libIscntrl
+;       libIsdigit
+;       libIsgraph
+;       libIslower
+;       libIsprint
+;       libIspuct
+;       libIsspace
+;       libIsupper
+;       libIsxdigit
+;       libTolower
+;       libToupper
 ; //////////////////////////////////////////////////////////////////////////// ;
 
 ; 英大文字か判定

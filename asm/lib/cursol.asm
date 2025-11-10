@@ -1,7 +1,9 @@
 ; //////////////////////////////////////////////////////////////////////////// ;
-; cursol.asm                                                                   ;
-;       libSetCursol            libSlideDisp            libSetCursolNextCol    ;
-;       libSetCursolNextLine                                                   ;
+; cursol.asm
+;       libSetCursol
+;       libSlideDisp
+;       libSetCursolNextCol
+;       libSetCursolNextLine
 ; //////////////////////////////////////////////////////////////////////////// ;
 
 ; カーソル表示更新
