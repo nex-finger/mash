@@ -467,6 +467,10 @@ sysPutChar:
 ; array.asm
 %include        "../asm/lib/array.asm"
 
+; 型変換マクロ
+; cast.asm
+%include        "../asm/lib/cast.asm"
+
 ; //////////////////////////////////////////////////////////////////////////// ;
 ; stdio.h                                                                      ;
 ;       libPutchar      libPuts         libsParse       libsPrintf             ;

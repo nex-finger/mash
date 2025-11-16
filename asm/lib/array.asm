@@ -41,8 +41,45 @@ libMemcpy:
 ;               0xffff: アドレス２が大きい
 libMemcmp:
         CALL    rPushReg
+        MOV WORD [.aRet], 0x0000
+
+        CMP     CX, 0x0000
+        JZ      .exit
+
+        MOV     AX, 0x0000
+
+.cmpLoop:
+        ADD     SI, AX                  ; オフセット追加
+        ADD     DI, AX
+
+        MOV BYTE BH, [SI]               ; [SI+AX]
+        MOV BYTE BL, [DI]
+
+        SUB     SI, AX                  ; オフセットリセット
+        SUB     DI, AX
+
+        CMP     BH, BL
+        JA      .upper                  ; BH > BLなら0x0001を返却
+        CMP     BH, BL
+        JB      .lower                  ; BH < BLなら0xffffを返却
+        
+        INC     AX
+        CMP     AX, CX
+        JZ      .exit
+        JMP     .cmpLoop
+
+.upper:
+        MOV WORD [.aRet], 0x0001
+        JMP     .exit
+.lower:
+        MOV WORD [.aRet], 0xffff
+        JMP     .exit
+.exit:
         CALL    rPopReg
+        MOV WORD AX, [.aRet]
         RET
+.aRet:
+        DW      0x0000
 
 ; メモリの探索
 ; memchr(c89相当)
