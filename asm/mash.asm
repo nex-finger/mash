@@ -79,6 +79,10 @@ sOneLineSeek:
 sNowDir:
         DW      DIR_ROOT                ; 現在いるディレクトリ
 
+; シェル変数関連
+sTopValAddr:
+        DW      0x0000                  ; シェル変数の連結リストの先頭アドレス
+
 ; //////////////////////////////////////////////////////////////////////////// ;
 ; --- 初期化プログラム ---
 ; ██╗███╗  ██╗██╗████████╗
@@ -150,6 +154,36 @@ mashInit:
 ; //////////////////////////////////////////////////////////////////////////// ;
 
 mashLoop:
+        ; 番兵のシェル変数を設定
+        MOV     CX, 0x0010
+        CALL    sysMalloc
+
+        MOV WORD [sTopValAddr], BP      ; 変数の先頭アドレス
+        MOV BYTE [BP], 0x00             ; 変数型
+
+        ADD     BP, 1
+
+        MOV     SI, .aInitialValue
+        MOV     DI, BP
+        MOV     CX, 8
+        CALL    libMemcpy               ; 変数名
+
+        ADD     BP, 8
+
+        MOV WORD [BP], 0x1234           ; 変数値
+
+        ADD     BP, 2
+
+        MOV WORD [BP], 0x0000           ; 次の変数アドレス(null設定)
+
+        ; デバッグ
+        DEBUG_REGISTER_DUMP 16, [sTopValAddr]
+
+        ; 設定する
+
+.__debugLoop:
+        JMP     .__debugLoop
+
         ;CALL    libSetCursolNextLine    ; 改行
         ;CALL    rOneLineClear           ; 
         
@@ -256,6 +290,8 @@ mashLoop:
         DB      "puts", 0x00
 .aTestsParse:
         DB      "sparse", 0x00
+.aInitialValue:
+        DB      "__init  "
 
 ; //////////////////////////////////////////////////////////////////////////// ;
 ; --- ビルトインコマンド ---

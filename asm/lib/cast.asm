@@ -6,10 +6,10 @@
 ; in  : AX      変換元の2バイト即値
 ; i/o   SI      変換結果を格納する先頭アドレス
 libitox:
-    CALL    rPushReg
+        CALL    rPushReg
 
-    CALL    rPopReg
-    RET
+        CALL    rPopReg
+        RET
 
 ; ファイル内サブルーチン
 
@@ -17,22 +17,22 @@ libitox:
 ; in  : AH      16進数値(0x00 ~ 0x0f)
 ; out : AL      16進文字('0' ~ 'f')
 ritox1digit:
-    CALL    rPushReg
+        CALL    rPushReg
 
-    AND     AH, 0x0f                    ; 上4ビットを無効化
-    CMP     AH, 0x09
-    JA      .transaf
-.trans09                                ; 0~9
-    MOV     [.aRet], AH
-    ADD     [.aRet], '0'
-.transaf
-    MOV     [.aRet], AH                 ; a~f
-    SUB     [.aRet], 10
-    ADD     [.aRet], 'a'
+        AND     AH, 0x0f                    ; 上4ビットを無効化
+        CMP     AH, 0x09
+        JA      .transaf
+.trans09:                               ; 0~9
+        MOV BYTE [.aRet], AH
+        ADD BYTE [.aRet], "0"
+.transaf:
+        MOV BYTE [.aRet], AH                 ; a~f
+        SUB BYTE [.aRet], 10
+        ADD BYTE [.aRet], "a"
 
-    CALL    rPopReg
+        CALL    rPopReg
 
-    MOV     AL, [.aRet]                 ; 戻り値設定
-    RET
-.aRet
-    DB      0x00
+        MOV BYTE AL, [.aRet]                 ; 戻り値設定
+        RET
+.aRet:
+        DB      0x00
