@@ -38,15 +38,18 @@ libStrtok:
 
 .mainLoutine:
         ; 区切り文字のアドレスを取得する
-        CALL    libStrchr               ; DI
+        CALL    libStrchr               ; DIに区切り文字のアドレス
 
         CMP     DI, _NULL
         JZ      .retNull                ; 区切り文字はもうない
 
         ; 先頭アドレスから区切り文字までの文字列をコピーするメモリを取得する
-          
+        MOV     CX, DI                  ; コピーする領域 = DI - SI
+        SUB     CX, SI
+        CALL    sysMalloc               ; メモリを取得
 
         ; 取得したメモリにコピーする
+        CALL    libMemcpy
 
 .retNull:                               ; 区切り文字は見つからなかった
         MOV WORD .aRet, _NULL
