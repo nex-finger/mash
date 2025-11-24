@@ -34,6 +34,49 @@
 %define     FD_FILE3            0x06
 
 ; --- マクロ ---
+; memcpy
+; %1 dest(コピー先アドレス)
+; %2 src(コピー元アドレス)
+; %3 size(コピーサイズ)
+%macro MACRO_MEMCPY 3
+        PUSH    DI
+        PUSH    SI
+        PUSH    CX
+
+        MOV     DI, %1
+        MOV     SI, %2
+        MOV     CX, %3
+
+        CALL    libMemcpy
+
+        POP     CX
+        POP     SI
+        POP     DI
+%endmacro
+
+; strchr
+; %1 str(検索する先頭アドレス)
+; %2 c(検索する文字)
+; %3 ret(発見したアドレス)
+%macro MACRO_STRCHR 2
+        PUSH    SI
+        PUSH    AX
+
+        MOV     SI, %1
+        MOV     AX, %2
+
+        CALL    libStrchr
+
+        POP     AX
+        POP     SI
+%endmacro
+
+; strchr(c89)相当
+; in  : SI      探索する文字列
+;       AH      区切り文字
+; out : DI      null: 区切り文字は存在しない
+;               null以外: 最初に発見したアドレス
+
 ; シリアル初期化
 %macro MACRO_SERIAL_INIT 0
         MOV     AH, 0x00                ; シリアルポート設定

@@ -11,15 +11,39 @@
 libStrchr:
         CALL    rPushReg
 
+        CMP     AH, 0x00                ; null文字の区切り文字は受け付けない
+        JZ      .breakAbnormal
+
+.chkLoop:
+        MOV BYTE AL, [SI]
+        CMP     AL, AH                  ; 検索したい文字がある場合は発見アドレスを
+        JZ      .breakNormal
+        CMP     AL, 0x00                ; 文字列の最後まで探してもないならnullを
+        JZ      .breakAbnormal
+        INC     SI
+        JMP     .chkLoop
+
+.breakNormal:
+        MOV WORD [.aRet], SI
+        JMP     .exit
+
+.breakAbnormal:
+        MOV WORD [.Ret], _NULL
+        JMP     .exit
+
+.exit:
         CALL    rPopReg
+        MOV WORD DI, [.aRet]
         RET
+.aRet:
+        DW      0x0000
 
 ; 文字列の分割
 ; strtok(c89)相当
 ; in  : SI      null: 続行
 ;               null以外: 新規文字列先頭ポインタ
 ;       AH      区切り文字
-; out : DI      null: 区切る文字列はない
+; i/o : DI      null: 区切る文字列はない
 ;               null以外: 区切った文字列先頭ポインタ
 ; SI!=null の場合、SIから新しく文字列を分割する
 ; SI==null の場合、前回保持したポインタから続行する
@@ -38,18 +62,16 @@ libStrtok:
 
 .mainLoutine:
         ; 区切り文字のアドレスを取得する
-        CALL    libStrchr               ; DIに区切り文字のアドレス
+        MACRO_STRCHR SI, AX
+        ;CALL    libStrchr               ; DIに区切り文字のアドレス
 
         CMP     DI, _NULL
         JZ      .retNull                ; 区切り文字はもうない
 
-        ; 先頭アドレスから区切り文字までの文字列をコピーするメモリを取得する
-        MOV     CX, DI                  ; コピーする領域 = DI - SI
-        SUB     CX, SI
-        CALL    sysMalloc               ; メモリを取得
-
         ; 取得したメモリにコピーする
-        CALL    libMemcpy
+        MACRO_MEMCPY DI, SI, CX
+        MOV WORD [.aRet], DI
+        JMP     .exit
 
 .retNull:                               ; 区切り文字は見つからなかった
         MOV WORD .aRet, _NULL
