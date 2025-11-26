@@ -349,17 +349,17 @@ sysDim:
 .type_uint:                             ; 符号なし整数型
         MOV BYTE [.aSize], 14           ; 整数型は14バイト固定
         MOV WORD SI, [.fill_uint]
-        MOV WORD [.func_call], SI       ; コールバックアドレス登録
+        MOV WORD .func_call, SI       ; コールバックアドレス登録
         JMP     .alloc_mem
 .type_sint:                             ; 符号付き整数型
         MOV BYTE [.aSize], 14           ; 整数型は14バイト固定
         MOV WORD SI, [.fill_sint]
-        MOV WORD [.func_call], SI
+        MOV WORD .func_cal, SI
         JMP     .alloc_mem
 .type_char:
         MOV BYTE [.aSize], 13           ; 文字型は13バイト固定
         MOV WORD SI, [.fill_char]
-        MOV WORD [.func_call], SI
+        MOV WORD .func_call, SI
         JMP     .alloc_mem
 .type_arr:
         MOV BYTE AL, [.aLen]            ; 整数配列のサイズは 2n+14 バイト
@@ -367,14 +367,14 @@ sysDim:
         ADD     AL, 14
         MOV BYTE [.aSize], AL
         MOV WORD SI, [.fill_arr]
-        MOV WORD [.func_call], SI
+        MOV WORD .func_call, SI
         JMP     .alloc_mem
 .type_str:
         MOV BYTE AL, [.aLen]            ; 文字配列のサイズは n+14 バイト
         ADD     AL, 14
         MOV BYTE [.aSize], AL
         MOV WORD SI, [.fill_str]
-        MOV WORD [.func_call], SI
+        MOV WORD .func_call, SI
         JMP     .alloc_mem
 .type_error:
         MOV BYTE [.aRet], RET_NG_PRM
