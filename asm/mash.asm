@@ -159,20 +159,25 @@ mashLoop:
         CALL    sysMalloc
 
         MOV WORD [sTopValAddr], BP      ; 変数の先頭アドレス
+
+        MOV BYTE [BP], 14
+
+        ADD     BP, 1                   ; sTopValAddr + 1
+
         MOV BYTE [BP], 0x00             ; 変数型
 
-        ADD     BP, 1
+        ADD     BP, 1                   ; sTopValAddr + 2
 
         MOV     SI, .aInitialValue
         MOV     DI, BP
         MOV     CX, 8
         CALL    libMemcpy               ; 変数名
 
-        ADD     BP, 8
+        ADD     BP, 8                   ; sTopValAddr + 10
 
         MOV WORD [BP], 0x1234           ; 変数値
 
-        ADD     BP, 2
+        ADD     BP, 2                   ; sTopValAddr + 12
 
         MOV WORD [BP], 0x0000           ; 次の変数アドレス(null設定)
 
@@ -305,12 +310,124 @@ mashLoop:
 
 ; dim コマンド
 ; シェル変数を追加する
-; in  : 
+; 最新変数に位置し、次の変数へのチェーンポインタに現在の最新変数が格納される。
+; 重複した同じ変数名を許容する(undimするまで最新以外の変数へはアクセスできなくなる)
+; in  : AH      変数型
+;               0x00: 符号なし整数型
+;               0x01: 符号付き整数型
+;               0x02: 文字型
+;               0x10: 符号なし整数配列
+;               0x12: 文字配列型
+;       AL      要素数(配列型の場合のみ有効)
+;       SI      変数文字列先頭アドレス
+; out : CH      エラーコード
 sysDim:
         CALL    rPushReg                ; レジスタ退避
 
+        MOV BYTE [.aRet], RET_OK        ; 戻り値設定
+
+        ; 格納できる内容はこの時点で入れておく
+        MOV BYTE [.aType], AH
+        MOV BYTE [.aLen], AL            ; 使わない型の場合参照しないので一旦入れておく
+        MACRO_MEMCPY [.aName], SI, 8
+
+        ; 変数を記録するメモリサイズを計算する
+        ; サイズが判明した後のコールバック関数も登録しておく
+        MOV BYTE AH, [.aType]
+        CMP     AH, TYPE_UINT
+        JZ      .type_uint
+        CMP     AH, TYPE_SINT
+        JZ      .type_sint
+        CMP     AH, TYPE_CHAR
+        JZ      .type_char
+        CMP     AH, TYPE_ARR
+        JZ      .type_arr
+        CMP     AH, TYPE_STR
+        JZ      .type_str
+        JMP     .type_error             ; 型エラー
+
+.type_uint:                             ; 符号なし整数型
+        MOV BYTE [.aSize], 14           ; 整数型は14バイト固定
+        MOV WORD SI, [.fill_uint]
+        MOV WORD [.func_call], SI       ; コールバックアドレス登録
+        JMP     .alloc_mem
+.type_sint:                             ; 符号付き整数型
+        MOV BYTE [.aSize], 14           ; 整数型は14バイト固定
+        MOV WORD SI, [.fill_sint]
+        MOV WORD [.func_call], SI
+        JMP     .alloc_mem
+.type_char:
+        MOV BYTE [.aSize], 13           ; 文字型は13バイト固定
+        MOV WORD SI, [.fill_char]
+        MOV WORD [.func_call], SI
+        JMP     .alloc_mem
+.type_arr:
+        MOV BYTE AL, [.aLen]            ; 整数配列のサイズは 2n+14 バイト
+        SHL     AL, 1
+        ADD     AL, 14
+        MOV BYTE [.aSize], AL
+        MOV WORD SI, [.fill_arr]
+        MOV WORD [.func_call], SI
+        JMP     .alloc_mem
+.type_str:
+        MOV BYTE AL, [.aLen]            ; 文字配列のサイズは n+14 バイト
+        ADD     AL, 14
+        MOV BYTE [.aSize], AL
+        MOV WORD SI, [.fill_str]
+        MOV WORD [.func_call], SI
+        JMP     .alloc_mem
+.type_error:
+        MOV BYTE [.aRet], RET_NG_PRM
+        JMP     .exit
+
+.alloc_mem:
+        ; 必要な分のメモリを動的確保する
+        ; free時に断片化が起きないよう一括取得を優先する
+        MOV     CH, 0x00
+        MOV BYTE CL, [.aSize]
+        CALL    sysMalloc               ; 確保メモリはBP
+        MOV WORD BP, [.aAddr]           ; 先頭アドレス保存
+
+        ; 現在の最新アドレスを一つ前へ
+        MOV WORD SI, [sTopValAddr]
+        MOV WORD [.aNext], SI
+
+        ; データを格納していく
+        MOV WORD BP, [.aAddr]           ; 先頭アドレス
+        MOV BYTE AH, [.aType]           ; 変数型
+        JMP     [.func_call]            ; コールバック呼び出し(void)
+
+.fill_uint:
+        ; 符号なし整数 代入コールバック
+.fill_sint:
+        ; 符号付き整数 代入コールバック
+.fill_char:
+        ; 文字 代入コールバック
+.fill_arr:
+        ; 配列 代入コールバック
+.fill_str:
+        ; 文字列 代入コールバック
+
+.exit:
         CALL    rPopReg                 ; レジスタ取得
+        MOV BYTE CH, [.aRet]
         RET
+.func_call:                             ; コールバックアドレス
+        DW      0x0000
+.aSize:                                 ; 変数メモリサイズ
+        DB      0x00
+.aType:                                 ; 変数型
+        DB      0x00
+.aName:                                 ; 変数名(最大8文字)
+        DB      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+.aLen:                                  ; 要素数
+        DB      0x00
+.aAddr:                                 ; 本変数の先頭アドレス
+        DW      0x0000
+.aNext:                                 ; 次の変数へのチェーンアドレス
+        DW      0x0000
+.aRet:                                  ; エラーコード
+        DB      0x00
 
 ; undim コマンド
 ; シェル変数を解放する
@@ -323,10 +440,18 @@ sysUndim:
 ; set コマンド
 ; シェル変数の値を更新する
 sysSet:
+        CALL    rPushReg                ; レジスタ退避
+
+        CALL    rPopReg                 ; レジスタ取得
+        RET
 
 ; get コマンド
 ; シェル変数の値を取得する
 sysGet:
+        CALL    rPushReg                ; レジスタ退避
+
+        CALL    rPopReg                 ; レジスタ取得
+        RET
 
 ; dir コマンド
 ; 現在のディレクトリのフォルダ、ファイルを表示する

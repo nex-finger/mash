@@ -33,6 +33,18 @@
 %define     FD_FILE2            0x05
 %define     FD_FILE3            0x06
 
+; --- シェル変数 ---
+; 変数型
+%define     TYPE_UINT           0x00
+%define     TYPE_SINT           0x01
+%define     TYPE_CHAR           0x02
+%define     TYPE_ARR            0x10
+%define     TYPE_STR            0x12
+
+; --- エラーコード ---
+%define     RET_OK              0x00
+%define     RET_NG_PRM          0x01    ; パラメータエラー
+
 ; --- マクロ ---
 ; memcpy
 ; %1 dest(コピー先アドレス)
