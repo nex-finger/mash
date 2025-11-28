@@ -140,20 +140,7 @@ mashInit:
 
         ;JMP     .dbgLoop
 %endif
-        
-        JMP     mashLoop                ; ループ処理へ移行
 
-; //////////////////////////////////////////////////////////////////////////// ;
-; --- ループプログラム ---
-; ██╗      ██████╗  ██████╗ ██████╗ 
-; ██║     ██╔═══██╗██╔═══██╗██╔══██╗
-; ██║     ██║   ██║██║   ██║██████╔╝
-; ██║     ██║   ██║██║   ██║██╔═══╝ 
-; ███████╗╚██████╔╝╚██████╔╝██║     
-; ╚══════╝ ╚═════╝  ╚═════╝ ╚═╝     
-; //////////////////////////////////////////////////////////////////////////// ;
-
-mashLoop:
         ; 番兵のシェル変数を設定
         MOV     CX, 0x0010
         CALL    sysMalloc
@@ -183,11 +170,21 @@ mashLoop:
 
         ; デバッグ
         DEBUG_REGISTER_DUMP 16, [sTopValAddr]
+        
+        JMP     mashLoop                ; ループ処理へ移行
 
+; //////////////////////////////////////////////////////////////////////////// ;
+; --- ループプログラム ---
+; ██╗      ██████╗  ██████╗ ██████╗ 
+; ██║     ██╔═══██╗██╔═══██╗██╔══██╗
+; ██║     ██║   ██║██║   ██║██████╔╝
+; ██║     ██║   ██║██║   ██║██╔═══╝ 
+; ███████╗╚██████╔╝╚██████╔╝██║     
+; ╚══════╝ ╚═════╝  ╚═════╝ ╚═╝     
+; //////////////////////////////////////////////////////////////////////////// ;
+
+mashLoop:
         ; 設定する
-
-.__debugLoop:
-        JMP     .__debugLoop
 
         ;CALL    libSetCursolNextLine    ; 改行
         ;CALL    rOneLineClear           ; 
@@ -348,33 +345,33 @@ sysDim:
 
 .type_uint:                             ; 符号なし整数型
         MOV BYTE [.aSize], 14           ; 整数型は14バイト固定
-        MOV WORD SI, [.fill_uint]
-        MOV WORD .func_call, SI       ; コールバックアドレス登録
+        MOV WORD SI, .fill_uint
+        MOV WORD [.func_call], SI       ; コールバックアドレス登録
         JMP     .alloc_mem
 .type_sint:                             ; 符号付き整数型
         MOV BYTE [.aSize], 14           ; 整数型は14バイト固定
-        MOV WORD SI, [.fill_sint]
-        MOV WORD .func_cal, SI
+        MOV WORD SI, .fill_sint
+        MOV WORD [.func_call], SI
         JMP     .alloc_mem
 .type_char:
         MOV BYTE [.aSize], 13           ; 文字型は13バイト固定
-        MOV WORD SI, [.fill_char]
-        MOV WORD .func_call, SI
+        MOV WORD SI, .fill_char
+        MOV WORD [.func_call], SI
         JMP     .alloc_mem
 .type_arr:
         MOV BYTE AL, [.aLen]            ; 整数配列のサイズは 2n+14 バイト
         SHL     AL, 1
         ADD     AL, 14
         MOV BYTE [.aSize], AL
-        MOV WORD SI, [.fill_arr]
-        MOV WORD .func_call, SI
+        MOV WORD SI, .fill_arr
+        MOV WORD [.func_call], SI
         JMP     .alloc_mem
 .type_str:
         MOV BYTE AL, [.aLen]            ; 文字配列のサイズは n+14 バイト
         ADD     AL, 14
         MOV BYTE [.aSize], AL
-        MOV WORD SI, [.fill_str]
-        MOV WORD .func_call, SI
+        MOV WORD SI, .fill_str
+        MOV WORD [.func_call], SI
         JMP     .alloc_mem
 .type_error:
         MOV BYTE [.aRet], RET_NG_PRM
@@ -392,21 +389,44 @@ sysDim:
         MOV WORD SI, [sTopValAddr]
         MOV WORD [.aNext], SI
 
+.fill_common1:                          ; 代入処理(共通)
         ; データを格納していく
         MOV WORD BP, [.aAddr]           ; 先頭アドレス
-        MOV BYTE AH, [.aType]           ; 変数型
+        MOV BYTE AH, [.aSize]           ; 変数型
+
+        MOV BYTE [BP], AH               ; BP: 変数サイズ
+        ADD     BP, 1
+        MOV BYTE AH, [.aType]
+        MOV BYTE [BP], AH               ; BP+1: 変数型
+        ADD     BP, 1
+        MACRO_MEMCPY .aName, BP, 8      ; BP+2: 変数名
+
         JMP     [.func_call]            ; コールバック呼び出し(void)
 
-.fill_uint:
-        ; 符号なし整数 代入コールバック
-.fill_sint:
-        ; 符号付き整数 代入コールバック
-.fill_char:
-        ; 文字 代入コールバック
-.fill_arr:
-        ; 配列 代入コールバック
-.fill_str:
-        ; 文字列 代入コールバック
+.fill_uint:                             ; 符号なし整数 代入コールバック
+.fill_sint:                             ; 符号付き整数 代入コールバック
+.fill_char:                             ; 文字 代入コールバック
+        JMP .fill_common2
+
+.fill_arr:                              ; 配列 代入コールバック
+.fill_str:                              ; 文字列 代入コールバック
+        MOV WORD BP, [.aAddr]           ; 先頭アドレス
+        MOV BYTE AH, [.aLen]
+        ADD     BP, 10
+        MOV BYTE [BP], AH               ; BP+10: 要素数
+        JMP .fill_common2
+
+.fill_common2:
+        MOV WORD BP, [.aAddr]           ; 先頭アドレス
+        MOV BYTE AH, [.aSize]
+        ADD     BL, AH
+        SUB     BP, 2
+        MOV WORD AX, [sTopValAddr]      ; BP+サイズ-2: 次の変数へのポインタ
+
+        ; 宣言した変数のポインタを最新ポインタに記録する
+        MOV WORD BP, [.aAddr]
+        MOV WORD [sTopValAddr], BP
+        JMP     .exit
 
 .exit:
         CALL    rPopReg                 ; レジスタ取得
