@@ -173,6 +173,9 @@ mashInit:
         
         JMP     mashLoop                ; ループ処理へ移行
 
+.aInitialValue:                         ; 番兵の変数名
+        DB      "__init  "
+
 ; //////////////////////////////////////////////////////////////////////////// ;
 ; --- ループプログラム ---
 ; ██╗      ██████╗  ██████╗ ██████╗ 
@@ -184,10 +187,32 @@ mashInit:
 ; //////////////////////////////////////////////////////////////////////////// ;
 
 mashLoop:
+        ; シェル変数の定義
+        MOV     AH, "0"
+        JMP     .input
+.dimLoop:
         ; 設定する
+        PUSH    AX
 
+        MOV     AH, 0x12
+        MOV     AL, 0x20
+        MOV     SI, [.aTokenName]
+
+        CALL    sysDim
+
+        ; ループ制御
+        POP     AX
+        CMP     AH, "0"
+        JZ      .input
+        INC     AH
+        JMP     .dimLoop
+
+.input:
         ;CALL    libSetCursolNextLine    ; 改行
         ;CALL    rOneLineClear           ; 
+
+        ; デバッグ(512バイト)
+        DEBUG_REGISTER_DUMP 0x0400, 0x8000
         
         MOV     AL, "\"        
         CALL    libPutchar
@@ -196,16 +221,12 @@ mashLoop:
         CALL    libPutchar
         CALL    libSetCursolNextCol
 .inputLoop:
+        ; 入力ループ(1文字事にループ)
+
         ; debug ---->
         ; in  : AX      ダンプするバイト数
         ;     : DS:DI   ダンプ開始アドレス
-        MOV     DI, sOneLineBuf-8
-        CALL    dbgDump
-
-        ;MOV     AX, 0x0000
-        ;MOV     DS, AX
-        ;MOV     AX, 0x0010
-        ;MOV     DI, sOneLineBuf+250
+        ;MOV     DI, sOneLineBuf-8
         ;CALL    dbgDump
         ; <---- debug
 
@@ -214,33 +235,10 @@ mashLoop:
         ;POP     AX
         CMP     AH, 0x00
         JZ      .inputLoop              ; 続ける
+
 .parseBuf:
+        ; バッファ解析
         MOV     AX, 0x0000
-
-        ;MOV     AX, 0x0000
-        ;MOV     DS, AX
-        ;MOV     SI, .aTestPuts
-
-        ;MOV     AX, SS
-        ;MOV     ES, AX
-        ;MOV     DI, BP
-
-        ;MOV     CX, 0x0100
-
-        ;CALL    libMemcpy
-
-        ;MOV     AX, ES
-        ;MOV     DS, AX
-        ;MOV     BP, DI
-
-;.__t:
-        ;JMP     .__t
-
-        ; in  : DS      コピー元のセグメント
-        ;     : SI      コピー元のアドレス
-        ;     : CX      コピーするサイズ
-        ; out : ES      コピー先のセグメント
-        ;     : DI      コピー先のアドレス
 
         ; puts
         MOV     BP, .aTestPuts          ; 識別文字列
@@ -254,7 +252,7 @@ mashLoop:
         MOV     BP, sOneLineBuf         ; 入力バッファ
         CALL    libsParse
 
-        ; malloc + puts
+        ; トークン分離
         MOV     CX, 0x0100              ; メモリ確保
         CALL    sysMalloc
         PUSH    BP
@@ -274,26 +272,19 @@ mashLoop:
         CALL    rOneLineClear
         JMP     mashLoop
 
-        ;CALL    rPutCR                  ; 改行
-        ;MOV     AX, 0x0000
-        ;MOV     DS, AX
-        ;MOV     ES, AX
-        ;MOV     SS, AX
-        ;MOV     DI, [sOneLineBuf]
-        ;CALL    sysPrintf               ; 表示
+        ; バッファトークン用の変数を解放
 
-        ;CALL    sysPwd                  ; 現在のディレクトリを表示
-
-        ;MOV     BP, .sAllow             ; ">"表示
-        ;CALL    sysEcho
         
         JMP     mashLoop                ; 永遠にループする
 .aTestPuts:
         DB      "puts", 0x00
 .aTestsParse:
         DB      "sparse", 0x00
-.aInitialValue:
-        DB      "__init  "
+
+.aTokenName:                            ; 入力バッファトークン変数名
+        DB      "_buftok"
+.aTokenNum:                             ; 連番(aTokenNameと連続したメモリに置くこと)
+        DB      "0"
 
 ; //////////////////////////////////////////////////////////////////////////// ;
 ; --- ビルトインコマンド ---
