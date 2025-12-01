@@ -376,6 +376,37 @@ sysDim:
         CALL    sysMalloc               ; 確保メモリはBP
         MOV WORD BP, [.aAddr]           ; 先頭アドレス保存
 
+;%ifdef __DEBUG
+        ; 確保したポインタを表示テスト
+        CALL    rPushReg
+
+        MOV     AX, BP
+        MOV     SI, .aDebugStr
+
+        CALL    libitox                 ; AXレジスタの値を4文字に変換
+
+        MOV     CX, 0x0000
+.debugLoop:
+        MOV     SI, .aDebugStr
+        ADD     SI, CX
+        MOV BYTE AL, [SI]
+
+        CALL    dbgSingle               ; ALを出力
+
+        CMP     CX, 0x0003
+        JZ      .debugNext
+        ADD     CX, 0x0001
+        JMP     .debugLoop
+
+.debugNext:        
+        CALL    rPopReg
+        JMP     .debugExit
+
+.aDebugStr:
+        DB      0x00, 0x00, 0x00, 0x00
+.debugExit:
+;%endif
+
         ; 現在の最新アドレスを一つ前へ
         MOV WORD SI, [sTopValAddr]
         MOV WORD [.aNext], SI
