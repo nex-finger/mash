@@ -141,6 +141,12 @@ mashInit:
         ;JMP     .dbgLoop
 %endif
 
+        MOV     AH, 0x00
+        MOV     SI, [.aInitialValue]
+
+        CALL    sysDim
+
+%ifdef __DEBUG_DONE
         ; 番兵のシェル変数を設定
         MOV     CX, 0x0010
         CALL    sysMalloc
@@ -170,6 +176,7 @@ mashInit:
 
         ; デバッグ
         DEBUG_REGISTER_DUMP 16, [sTopValAddr]
+%endif
         
         JMP     mashLoop                ; ループ処理へ移行
 
@@ -375,7 +382,8 @@ sysDim:
         CALL    sysMalloc               ; 確保メモリはBP
         MOV WORD [.aAddr], BP           ; 先頭アドレス保存
 
-;%ifdef __DEBUG
+;%ifdef __DEBUG_DONE
+%ifdef __DEBUG_DONE                     ; テスト終わったので封鎖
         ; 確保したポインタを表示テスト
         CALL    rPushReg
 
@@ -407,7 +415,7 @@ sysDim:
 .aDebugStr:
         DB      0x00, 0x00, 0x00, 0x00
 .debugExit:
-;%endif
+%endif
 
         ; 現在の最新アドレスを一つ前へ
         MOV WORD SI, [sTopValAddr]
