@@ -189,7 +189,6 @@ mashInit:
 mashLoop:
         ; シェル変数の定義
         MOV     AH, "0"
-        JMP     .input
 .dimLoop:
         ; 設定する
         PUSH    AX
@@ -374,13 +373,13 @@ sysDim:
         MOV     CH, 0x00
         MOV BYTE CL, [.aSize]
         CALL    sysMalloc               ; 確保メモリはBP
-        MOV WORD BP, [.aAddr]           ; 先頭アドレス保存
+        MOV WORD [.aAddr], BP           ; 先頭アドレス保存
 
 ;%ifdef __DEBUG
         ; 確保したポインタを表示テスト
         CALL    rPushReg
 
-        MOV     AX, BP
+        MOV WORD AX, [.aAddr]
         MOV     SI, .aDebugStr
 
         CALL    libitox                 ; AXレジスタの値を4文字に変換
@@ -399,6 +398,9 @@ sysDim:
         JMP     .debugLoop
 
 .debugNext:        
+        MOV     AL, 0x0d                ; 改行
+        CALL    dbgSingle
+
         CALL    rPopReg
         JMP     .debugExit
 

@@ -9,6 +9,17 @@ libitox:
         CALL    rPushReg
 
         MOV WORD [.aInput], AX
+        MOV WORD [.aRet], SI
+
+        ; debug
+        ;MOV BYTE [SI], "1"
+        ;INC     SI
+        ;MOV BYTE [SI], "2"
+        ;INC     SI
+        ;MOV BYTE [SI], "3"
+        ;INC     SI
+        ;MOV BYTE [SI], "4"
+        ;JMP     .exit
 
         ; 1文字目
         MOV     AX, [.aInput]
@@ -42,6 +53,7 @@ libitox:
         MOV BYTE [SI], AL
         INC     SI
 
+.exit:
         CALL    rPopReg
         MOV     SI, [.aRet]
         RET
@@ -61,14 +73,17 @@ ritox1digit:
         AND     AH, 0x0f                    ; 上4ビットを無効化
         CMP     AH, 0x09
         JA      .transaf
-.trans09:                               ; 0~9
+.trans09:                                   ; 0~9
         MOV BYTE [.aRet], AH
-        ADD BYTE [.aRet], "0"
+        ADD BYTE [.aRet], 0x30              ; "0"
+        JMP     .exit
 .transaf:
-        MOV BYTE [.aRet], AH                 ; a~f
+        MOV BYTE [.aRet], AH                ; a~f
         SUB BYTE [.aRet], 10
-        ADD BYTE [.aRet], "a"
+        ADD BYTE [.aRet], 0x41              ; A
+        JMP     .exit
 
+.exit:
         CALL    rPopReg
 
         MOV BYTE AL, [.aRet]                 ; 戻り値設定
