@@ -141,8 +141,15 @@ mashInit:
         ;JMP     .dbgLoop
 %endif
 
+        MOV WORD [sTopValAddr], 0x0000       ; 初期化
+
         MOV     AH, 0x00
-        MOV     SI, [.aInitialValue]
+        MOV     SI, .aInitialValue
+
+        ;PUSH    AX
+        ;MOV     AX, SI
+        ;CALL    dbgPrint16bit           ; デバッグ
+        ;POP     AX
 
         CALL    sysDim
 
@@ -218,7 +225,7 @@ mashLoop:
         ;CALL    rOneLineClear           ; 
 
         ; デバッグ(512バイト)
-        DEBUG_REGISTER_DUMP 0x0400, 0x8000
+        DEBUG_REGISTER_DUMP 0x0100, 0x8000
         
         MOV     AL, "\"        
         CALL    libPutchar
@@ -318,12 +325,33 @@ mashLoop:
 sysDim:
         CALL    rPushReg                ; レジスタ退避
 
+        ; 確保メモリ確認 ---->
+        PUSH    AX
+        MOV WORD AX, 0x0001
+        CALL    dbgPrint16bit           ; デバッグ
+        POP     AX
+
+        PUSH    AX
+        MOV WORD AX, SI
+        CALL    dbgPrint16bit           ; デバッグ
+        POP     AX
+        ; <----
+
         MOV BYTE [.aRet], RET_OK        ; 戻り値設定
 
         ; 格納できる内容はこの時点で入れておく
         MOV BYTE [.aType], AH
         MOV BYTE [.aLen], AL            ; 使わない型の場合参照しないので一旦入れておく
-        MACRO_MEMCPY [.aName], SI, 8
+
+        ; デバッグ ---->
+        DEBUG_REGISTER_DUMP 8, SI
+        ; <----
+
+        MACRO_MEMCPY .aName, SI, 8
+
+        ; デバッグ ---->
+        DEBUG_REGISTER_DUMP 8, .aName
+        ; <----
 
         ; 変数を記録するメモリサイズを計算する
         ; サイズが判明した後のコールバック関数も登録しておく
@@ -382,44 +410,21 @@ sysDim:
         CALL    sysMalloc               ; 確保メモリはBP
         MOV WORD [.aAddr], BP           ; 先頭アドレス保存
 
-;%ifdef __DEBUG_DONE
-%ifdef __DEBUG_DONE                     ; テスト終わったので封鎖
-        ; 確保したポインタを表示テスト
-        CALL    rPushReg
-
-        MOV WORD AX, [.aAddr]
-        MOV     SI, .aDebugStr
-
-        CALL    libitox                 ; AXレジスタの値を4文字に変換
-
-        MOV     CX, 0x0000
-.debugLoop:
-        MOV     SI, .aDebugStr
-        ADD     SI, CX
-        MOV BYTE AL, [SI]
-
-        CALL    dbgSingle               ; ALを出力
-
-        CMP     CX, 0x0003
-        JZ      .debugNext
-        ADD     CX, 0x0001
-        JMP     .debugLoop
-
-.debugNext:        
-        MOV     AL, 0x0d                ; 改行
-        CALL    dbgSingle
-
-        CALL    rPopReg
-        JMP     .debugExit
-
-.aDebugStr:
-        DB      0x00, 0x00, 0x00, 0x00
-.debugExit:
-%endif
-
         ; 現在の最新アドレスを一つ前へ
         MOV WORD SI, [sTopValAddr]
         MOV WORD [.aNext], SI
+
+        ; 確保メモリ確認 ---->
+        PUSH    AX
+        MOV WORD AX, 0x0002
+        CALL    dbgPrint16bit           ; デバッグ
+        POP     AX
+
+        PUSH    AX
+        MOV WORD AX, [.aAddr]
+        CALL    dbgPrint16bit           ; デバッグ
+        POP     AX
+        ; <----
 
 .fill_common1:                          ; 代入処理(共通)
         ; データを格納していく
@@ -431,7 +436,8 @@ sysDim:
         MOV BYTE AH, [.aType]
         MOV BYTE [BP], AH               ; BP+1: 変数型
         ADD     BP, 1
-        MACRO_MEMCPY .aName, BP, 8      ; BP+2: 変数名
+
+        MACRO_MEMCPY BP, .aName, 8      ; BP+2: 変数名
 
         JMP     [.func_call]            ; コールバック呼び出し(void)
 
@@ -1292,6 +1298,39 @@ dbgRegDump:
         RET
 .allocAddr:
         DB      0x00, 0x00
+
+; 16ビット値をシリアル出力
+; in  : AX      出力する値
+dbgPrint16bit:
+        ; 確保したポインタを表示テスト
+        CALL    rPushReg
+        
+        MOV     SI, .aDebugStr
+
+        CALL    libitox                 ; AXレジスタの値を4文字に変換
+
+        MOV     CX, 0x0000
+.debugLoop:
+        MOV     SI, .aDebugStr
+        ADD     SI, CX
+        MOV BYTE AL, [SI]
+
+        CALL    dbgSingle               ; ALを出力
+
+        CMP     CX, 0x0003
+        JZ      .debugNext
+        ADD     CX, 0x0001
+        JMP     .debugLoop
+
+.debugNext:        
+        MOV     AL, 0x0a                ; 改行
+        CALL    dbgSingle
+
+        CALL    rPopReg
+        RET
+
+.aDebugStr:
+        DB      0x00, 0x00, 0x00, 0x00
 
 mashHlt:
         JMP     mashHlt

@@ -55,7 +55,6 @@ libitox:
 
 .exit:
         CALL    rPopReg
-        MOV     SI, [.aRet]
         RET
 .aInput:
         DW      0x0000
