@@ -426,6 +426,18 @@ sysDim:
         POP     AX
         ; <----
 
+        ; チェーン確認 ---->
+        PUSH    AX
+        MOV WORD AX, 0x0003
+        CALL    dbgPrint16bit           ; デバッグ
+        POP     AX
+
+        PUSH    AX
+        MOV WORD AX, [.aNext]
+        CALL    dbgPrint16bit           ; デバッグ
+        POP     AX
+        ; <----
+
 .fill_common1:                          ; 代入処理(共通)
         ; データを格納していく
         MOV WORD BP, [.aAddr]           ; 先頭アドレス
@@ -456,11 +468,13 @@ sysDim:
 
 .fill_common2:
         MOV WORD BP, [.aAddr]           ; 先頭アドレス
+        MOV     BH, 0x00
         MOV BYTE AH, [.aSize]
         ADD     BL, AH
+        ADD     BP, BX
         SUB     BP, 2
-        MOV WORD AX, [sTopValAddr]      ; BP+サイズ-2: 次の変数へのポインタ
-
+        MOV WORD AX, [.aNext]
+        MOV WORD [BP], AX
         ; 宣言した変数のポインタを最新ポインタに記録する
         MOV WORD BP, [.aAddr]
         MOV WORD [sTopValAddr], BP
@@ -508,6 +522,21 @@ sysSet:
 sysGet:
         CALL    rPushReg                ; レジスタ退避
 
+        CALL    rPopReg                 ; レジスタ取得
+        RET
+
+; list コマンド
+; シェル変数のチェーンを列挙する
+sysList:
+        CALL    rPushReg                ; レジスタ退避
+
+.listLoop:
+        ; チェーン情報をAXに格納する
+        CMP     AX, 0x0000
+        JNZ     .listLoop:
+        JMP     .exit:
+
+.exit:
         CALL    rPopReg                 ; レジスタ取得
         RET
 
