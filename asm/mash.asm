@@ -530,7 +530,34 @@ sysGet:
 sysList:
         CALL    rPushReg                ; レジスタ退避
 
+        MOV     BP, .aLabel_intro
+        CALL    libsParse               ; 説明分表示
+
+        MOV     SI, [sTopValAddr]       ; 変数構造体のポインタを取得する
+        MOV WORD [aStruct_p], SI
+
 .listLoop:
+        ; アドレス、変数名、値の表示する
+        MOV     SI, [aStruct_p]
+        ADD     SI, 0
+        MOV WORD AX, [SI]
+        MOV     SI, .aTmp_long          ; アドレス表示
+
+        MOV     BP, aSample_tab
+        CALL    libsParse               ; タブ
+
+        ; 型
+
+        MOV     BP, aSample_tab
+        CALL    libsParse               ; タブ
+
+        ; 変数名表示
+
+        ; 値
+
+        MOV     BP, aSample_next
+        CALL    libsParse               ; 改行
+
         ; チェーン情報をAXに格納する
         CMP     AX, 0x0000
         JNZ     .listLoop:
@@ -539,6 +566,20 @@ sysList:
 .exit:
         CALL    rPopReg                 ; レジスタ取得
         RET
+.aLabel_intro:                          ; １行目の説明
+        DB      "ADDR\tTYPE\tNAME\tVALUE\n", 0x00
+.aSample_tab:
+        DB      "\t", 0x00
+.aSample_next:
+        DB      "\n", 0x00
+.aStruct_p:                             ; 変数構造体のポインタ
+        DW      0x0000
+.aTmp_byte:
+        DB      0x00
+.aTmp_word:
+        DW      0x00, 0x00
+.aTmp_long:
+        DB      0x00, 0x00, 0x00, 0x00
 
 ; dir コマンド
 ; 現在のディレクトリのフォルダ、ファイルを表示する
