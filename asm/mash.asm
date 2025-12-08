@@ -143,14 +143,14 @@ mashInit:
 
         MOV WORD [sTopValAddr], 0x0000       ; 初期化
 
+        ; 番兵
         MOV     AH, 0x00
         MOV     SI, .aInitialValue
+        CALL    sysDim
 
-        ;PUSH    AX
-        ;MOV     AX, SI
-        ;CALL    dbgPrint16bit           ; デバッグ
-        ;POP     AX
-
+        ; テスト変数
+        MOV     AH, 0x01
+        MOV     SI, .aTestValue
         CALL    sysDim
 
         ; デバッグ ---->
@@ -193,6 +193,8 @@ mashInit:
 
 .aInitialValue:                         ; 番兵の変数名
         DB      "__init  "
+..aTestValue:
+        DB      "test    "
 
 ; //////////////////////////////////////////////////////////////////////////// ;
 ; --- ループプログラム ---
@@ -330,15 +332,15 @@ sysDim:
         CALL    rPushReg                ; レジスタ退避
 
         ; 確保メモリ確認 ---->
-        PUSH    AX
-        MOV WORD AX, 0x0001
-        CALL    dbgPrint16bit           ; デバッグ
-        POP     AX
+        ;PUSH    AX
+        ;MOV WORD AX, 0x0001
+        ;CALL    dbgPrint16bit           ; デバッグ
+        ;POP     AX
 
-        PUSH    AX
-        MOV WORD AX, SI
-        CALL    dbgPrint16bit           ; デバッグ
-        POP     AX
+        ;PUSH    AX
+        ;MOV WORD AX, SI
+        ;CALL    dbgPrint16bit           ; デバッグ
+        ;POP     AX
         ; <----
 
         MOV BYTE [.aRet], RET_OK        ; 戻り値設定
@@ -580,7 +582,6 @@ sysList:
         MOV     BP, .aLabel_string
         JMP     .cmp_exit
 .cmp_error:                             ; 一旦エラー処理はなし
-
 .cmp_exit:
         MOV BYTE [.aStruct_type], AH
         CALL    libsParseNoCRLF
