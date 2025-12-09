@@ -7,6 +7,9 @@
 ; ロゴ
 ; https://jp.mathworks.com/matlabcentral/fileexchange/181715-makebanner-big-ascii-style-comment-generator
 
+%ifndef     __MASH_ASM
+%define     __MASH_ASM
+
 ; --- ファイルインクルード ---
 %include        "../asm/define.asm"
 %define         __DEBUG                 ; デバッグ時に有効
@@ -150,7 +153,11 @@ mashInit:
 
         ; デバッグ ---->
         MOV     AH, 0x01                ; テスト変数
-        MOV     SI, .aTestValue
+        MOV     SI, .aTestValue01
+        CALL    sysDim                  ; 定義
+
+        MOV     AH, 0x02                ; テスト変数
+        MOV     SI, .aTestValue02
         CALL    sysDim                  ; 定義
 
         CALL    sysList                 ; 一覧表示
@@ -192,8 +199,10 @@ mashInit:
 
 .aInitialValue:                         ; 番兵の変数名
         DB      "__init  "
-.aTestValue:
-        DB      "test    "
+.aTestValue01:
+        DB      "test01  "
+.aTestValue02:
+        DB      "test02  "
 
 ; //////////////////////////////////////////////////////////////////////////// ;
 ; --- ループプログラム ---
@@ -547,11 +556,20 @@ sysList:
 
 .listLoop:
         ; アドレス、変数名、値の表示する
-        MOV WORD AX, SI                 ; アドレスを表示
+        MOV WORD AX, [.aStruct_p]       ; アドレスを表示
         MOV     SI, .aTmp_long
         CALL    libitox
         MOV     BP, .aTmp_long
         CALL    libsParseNoCRLF
+
+; デバッグ---->
+.DebugChk:
+        PUSH    AX
+        MOV BYTE AH, [.DebugCnt]
+        CMP     AH, 0x00
+        JNZ     .DebugChk
+        POP     AX
+; <----
 
         MOV     BP, .aSample_tab        ; タブ
         CALL    libsParseNoCRLF        
@@ -589,57 +607,95 @@ sysList:
         MOV BYTE [.aStruct_type], AH
         CALL    libsParseNoCRLF
 
-        ;MOV     SI, [.aStruct_p]        ; 変数名を表示
-        ;ADD     SI, 2
-        ;MACRO_MEMCPY .aTmp_double, SI, 8
-        ;MOV     SI, .aTmp_double
-        ;CALL    libsParseNoCRLF
-
         MOV     BP, .aSample_tab        ; タブ
         CALL    libsParseNoCRLF
 
-        ;MOV     BP, .aTmp_string
-        ;CALL    libsParseNoCRLF
-
-        ;MOV     SI, [.aStruct_p]        ; 値を表示
-        ;ADD     SI, 10
-        ;MOV WORD AX, [SI]
-        ;MOV     SI, .aTmp_long
-        ;CALL    libsParseNoCRLF
-
-        ;MOV     BP, .aSample_tab        ; タブ
-        ;CALL    libsParseNoCRLF
-
         MOV     SI, [.aStruct_p]        ; 変数名表示
         ADD     SI, 2
-        MOV     DI, .aTmp_string
-        MOV     CX, 0x0008
-        CALL    libMemcpy
+        MACRO_MEMCPY .aTmp_string, SI, 8
         MOV     BP, .aTmp_string
         CALL    libsParseNoCRLF
 
         MOV     BP, .aSample_tab        ; タブ
         CALL    libsParseNoCRLF
 
-        ; 値
+        MOV BYTE AH, [.aStruct_type]    ; 値を表示
+        CMP     AH, 0x00                ; 変数型により分岐
+        JZ      .aPrintUint
+        CMP     AH, 0x01
+        JZ      .aPrintSint
+        CMP     AH, 0x02
+        JZ      .aPrintChar
+        CMP     AH, 0x10
+        JZ      .aPrintArray
+        CMP     AH, 0x12
+        JZ      .aPrintString
+        JMP     .aPrintError
+.aPrintUint:                            ; 符号なし16ビット 16進表示
+        MOV     BP, .aSample_preHex     ; "0x"
+        CALL    libsParseNoCRLF
+        MOV WORD AX, [.aStruct_p]       ; 16進4文字
+        ADD     AX, 10
+        MOV     SI, .aTmp_long
+        CALL    libitox                 ; 数値→文字列
+        MOV     BP, .aTmp_long
+        CALL    libsParseNoCRLF
+        JMP     .aPrintNext
+.aPrintSint:                            ; 符号あり16ビット 10進表示
+        MOV WORD AX, [.aStruct_p]       ; 10進8文字
+        ADD     AX, 10
+        MOV     SI, .aTmp_string
+        CALL    libitod                 ; 数値→文字列
+        MOV     BP, .aTmp_string
+        CALL    libsParseNoCRLF
+        JMP     .aPrintNext
+.aPrintChar:                            ; 文字 16進表示
+        JMP     .aPrintNext
+.aPrintArray:                           ; 配列 16進表示の繰り返し
+        JMP     .aPrintNext
+.aPrintString:                          ; 文字列 文字表示
+        JMP     .aPrintNext
+.aPrintError:                           ; 異常値 一旦無限ループ
+        JMP     .aPrintError
 
+.aPrintNext:
         MOV     BP, .aSample_next
-        CALL    libsParse               ; 改行
+        CALL    libsParseNoCRLF         ; 改行
 
         ; チェーン情報をAXに格納する
         ; デバッグ ---->
-        JMP     .exit
+        ;JMP     .exit
         ; <----
 
+        MOV     BP, [.aStruct_p]        ; 変数チェーンを確認、nullなら終了
+        MOV BYTE BL, [BP]
+        MOV     AX, BP
+        ADD     AL, BL
+        SUB     AX, 2                   ; チェーンは変数構造体の末尾2バイト
+        MOV     BP, AX
+
+        ; 確保メモリ確認 ---->
+        ;PUSH    AX
+        ;MOV     AX, [BP]
+        ;CALL    dbgPrint16bit           ; デバッグ
+        ;POP     AX
+        ; <----
+
+        MOV     AX, [BP]
         CMP     AX, 0x0000
         JZ      .exit
+        MOV WORD [.aStruct_p], AX       ; 次の変数のポインタをセット
+        ;MOV BYTE [.DebugCnt], 0x01 ;デバッグ
         JMP     .listLoop
+
+.DebugCnt:
+        DB      0x00
 
 .exit:
         CALL    rPopReg                 ; レジスタ取得
         RET
 .aLabel_intro:                          ; １行目の説明
-        DB      "ADDR\tTYPE\tNAME\tVALUE", 0x00
+        DB      "ADDRESS\tTYPE\tNAME\tVALUE", 0x00
 .aLabel_uint:
         DB      "uint16", 0x00
 .aLabel_array:
@@ -650,6 +706,8 @@ sysList:
         DB      "char", 0x00
 .aLabel_string:
         DB      "string", 0x00
+.aSample_preHex:
+        DB      "0x", 0x00
 .aSample_tab:
         DB      "\t", 0x00
 .aSample_next:
@@ -658,12 +716,12 @@ sysList:
         DW      0x0000
 .aStruct_type:                          ; 変数の型
         DB      0x00
-.aTmp_byte:
-        DB      0x00
-.aTmp_word:
-        DW      0x00, 0x00
-.aTmp_long:
-        DB      0x00, 0x00, 0x00, 0x00
+.aTmp_byte:                             ; 1文字 + null
+        DB      0x00, 0x00
+.aTmp_word:                             ; 2文字 + null
+        DW      0x00, 0x00, 0x00
+.aTmp_long:                             ; 4文字 + null
+        DB      0x00, 0x00, 0x00, 0x00, 0x00
 .aTmp_string:                           ; 8文字 + null
         DB      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 
@@ -1514,3 +1572,5 @@ mashHlt:
 ; --- 0埋め ---
 secEnd:
         times 0x4000-($-$$) DB 0        ; mash常駐は16セクタ
+
+%endif  ; __MASH_ASM

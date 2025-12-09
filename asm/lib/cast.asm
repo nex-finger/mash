@@ -2,9 +2,13 @@
 ; cast.h                                                                       ;
 ; //////////////////////////////////////////////////////////////////////////// ;
 
+%ifndef     __CAST_ASM
+%define     __CAST_ASM
+
 ; 2バイト変数を16進文字列へ変換
+; Int -> heX
 ; in  : AX      変換元の2バイト即値
-; i/o   SI      変換結果を格納する先頭アドレス
+; i/o   SI      変換結果を格納する先頭アドレス(4バイト消費)
 libitox:
         CALL    rPushReg
 
@@ -63,6 +67,46 @@ libitox:
 
 ; ファイル内サブルーチン
 
+; 2バイト変数を10進文字列へ変換
+; Int -> Decimal
+; in  : AX      変換元の2バイト即値
+; i/o : SI      変換結果を格納する先頭アドレス(8バイト消費)
+libitod:
+        CALL    rPushReg
+
+        ; 引数格納
+        MOV WORD [.inValue], AX
+        MOV WORD [.inAddress], SI
+
+        ; 正の数か負の数か確認する
+        MOV WORD AX, [.inValue]
+        CMP     AX, 0x8000              ; 0x8000 = 0(10進)
+        JA      .aSign_plus             ; 0x8000異常で正
+        JMP     .aSign_minus            ; 0x8000未満で負
+
+.aSign_plus:                            ; 1文字目は"+"
+        MOV WORD BP, [.inAddress]
+        MOV BYTE [BP], 0x2B
+        INC     BP
+        MOV WORD [.inAddress], BP
+        JMP     .aSign_next
+.aSign_minus:                           ; 1文字目は"-"
+        MOV WORD BP, [.inAddress]
+        MOV BYTE [BP], 0x2D
+        INC     BP
+        MOV WORD [.inAddress], BP
+        JMP     .aSign_next
+.aSign_next:
+        ; 2025/12/10 ここまで
+
+.exit:
+        CALL    rPopReg
+        RET
+.inValue:                               ; 入力即値
+        DW      0x0000
+.inAddress:                             ; 入力ポインタ
+        DW      0x0000
+
 ; 16進数値 → 16進文字 (1文字)
 ; in  : AH      16進数値(0x00 ~ 0x0f)
 ; out : AL      16進文字('0' ~ 'f')
@@ -89,3 +133,5 @@ ritox1digit:
         RET
 .aRet:
         DB      0x00
+
+%endif  ; __CAST_ASM

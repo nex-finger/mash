@@ -1,3 +1,6 @@
+%ifndef     __DEFINE_ASM
+%define     __DEFINE_ASM
+
 ; --- 一般定義 ---
 %define     _NULL               0x0000
 
@@ -119,3 +122,5 @@
         POP     DI
         POP     AX
 %endmacro
+
+%endif  ;__DEFINE_ASM
