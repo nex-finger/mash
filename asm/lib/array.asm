@@ -10,7 +10,7 @@
 ; memcpy(c89相当)
 ; in  : SI      コピー元のアドレス
 ;       CX      コピーするサイズ
-; out : DI      コピー先のアドレス
+;       DI      コピー先のアドレス
 libMemcpy:
         CALL    rPushReg                ; レジスタ退避
 

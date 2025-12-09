@@ -148,13 +148,12 @@ mashInit:
         MOV     SI, .aInitialValue
         CALL    sysDim
 
-        ; テスト変数
-        MOV     AH, 0x01
-        MOV     SI, .aTestValue
-        CALL    sysDim
-
         ; デバッグ ---->
-        CALL    sysList
+        MOV     AH, 0x01                ; テスト変数
+        MOV     SI, .aTestValue
+        CALL    sysDim                  ; 定義
+
+        CALL    sysList                 ; 一覧表示
         ; <----
 
 %ifdef __DEBUG_DONE
@@ -193,7 +192,7 @@ mashInit:
 
 .aInitialValue:                         ; 番兵の変数名
         DB      "__init  "
-..aTestValue:
+.aTestValue:
         DB      "test    "
 
 ; //////////////////////////////////////////////////////////////////////////// ;
@@ -536,6 +535,10 @@ sysGet:
 sysList:
         CALL    rPushReg                ; レジスタ退避
 
+        MOV     BP, .aTmp_string
+        ADD     BP, 8
+        MOV BYTE [BP], 0x00             ; 変数文字列の最後をnullに
+
         MOV     BP, .aLabel_intro
         CALL    libsParse               ; 説明分表示
 
@@ -551,7 +554,7 @@ sysList:
         CALL    libsParseNoCRLF
 
         MOV     BP, .aSample_tab        ; タブ
-        CALL    libsParseNoCRLF
+        CALL    libsParseNoCRLF        
 
         MOV WORD SI, [.aStruct_p]       ; 変数型を表示
         ADD     SI, 1
@@ -592,20 +595,31 @@ sysList:
         ;MOV     SI, .aTmp_double
         ;CALL    libsParseNoCRLF
 
-        MOV     BP, .aSample_tab         ; タブ
+        MOV     BP, .aSample_tab        ; タブ
         CALL    libsParseNoCRLF
 
-        MOV     SI, [.aStruct_p]         ; 値を表示
-        ADD     SI, 10
-        MOV WORD AX, [SI]
-        MOV     SI, .aTmp_long
+        ;MOV     BP, .aTmp_string
+        ;CALL    libsParseNoCRLF
+
+        ;MOV     SI, [.aStruct_p]        ; 値を表示
+        ;ADD     SI, 10
+        ;MOV WORD AX, [SI]
+        ;MOV     SI, .aTmp_long
+        ;CALL    libsParseNoCRLF
+
+        ;MOV     BP, .aSample_tab        ; タブ
+        ;CALL    libsParseNoCRLF
+
+        MOV     SI, [.aStruct_p]        ; 変数名表示
+        ADD     SI, 2
+        MOV     DI, .aTmp_string
+        MOV     CX, 0x0008
+        CALL    libMemcpy
+        MOV     BP, .aTmp_string
         CALL    libsParseNoCRLF
 
-        MOV     BP, .aSample_tab         ; タブ
+        MOV     BP, .aSample_tab        ; タブ
         CALL    libsParseNoCRLF
-
-        ; 変数名表示
-
 
         ; 値
 
@@ -627,11 +641,11 @@ sysList:
 .aLabel_intro:                          ; １行目の説明
         DB      "ADDR\tTYPE\tNAME\tVALUE", 0x00
 .aLabel_uint:
-        DB      "uint", 0x00
+        DB      "uint16", 0x00
 .aLabel_array:
         DB      "array", 0x00
 .aLabel_sint:
-        DB      "sint", 0x00
+        DB      "sint16", 0x00
 .aLabel_char:
         DB      "char", 0x00
 .aLabel_string:
@@ -650,8 +664,8 @@ sysList:
         DW      0x00, 0x00
 .aTmp_long:
         DB      0x00, 0x00, 0x00, 0x00
-.aTmp_double:
-        DB      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+.aTmp_string:                           ; 8文字 + null
+        DB      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 
 ; dir コマンド
 ; 現在のディレクトリのフォルダ、ファイルを表示する
