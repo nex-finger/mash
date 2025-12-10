@@ -119,13 +119,23 @@ mashInit:
         MOV     SI, .aTestValue01
         CALL    sysDim                  ; 定義
 
-        MOV     AH, 0x01                ; テスト変数
+        MOV     AH, 0x10                ; テスト変数
+        MOV     AL, 3                   ; 要素数は3
         MOV     SI, .aTestValue02
         CALL    sysDim                  ; 定義
 
-        MOV     AH, 0x02                ; テスト変数
+        MOV     AH, 0x01                ; テスト変数
         MOV     SI, .aTestValue03
         CALL    sysDim                  ; 定義
+
+        MOV     AH, 0x02                ; テスト変数
+        MOV     SI, .aTestValue04
+        CALL    sysDim                  ; 定義
+
+        MOV     AH, 0x12                ; テスト変数
+        MOV     AL, 3                   ; 要素数は3
+        MOV     SI, .aTestValue05
+        CALL    sysDim   
 
         CALL    sysList                 ; 一覧表示
         ; <----
@@ -135,11 +145,15 @@ mashInit:
 .aInitialValue:                         ; 番兵の変数名
         DB      "__init  "
 .aTestValue01:
-        DB      "test01  "
+        DB      "test_ui "
 .aTestValue02:
-        DB      "test02  "
+        DB      "test_arr"
 .aTestValue03:
-        DB      "test03  "
+        DB      "test_si "
+.aTestValue04:
+        DB      "test_ch "
+.aTestValue05:
+        DB      "test_str"
 
 ; //////////////////////////////////////////////////////////////////////////// ;
 ; --- ループプログラム ---
@@ -462,8 +476,19 @@ sysUndim:
 
 ; set コマンド
 ; シェル変数の値を更新する
+; in  : SI      変数文字列先頭アドレス
+;       AL      要素数(配列型の場合のみ有効)
+; out : CH      エラーコード
 sysSet:
         CALL    rPushReg                ; レジスタ退避
+
+        ; 入力変数名と一致する変数を発見する(strstr使用？)
+
+        ; 発見した変数の型を取得する
+
+        ; シェルから入力された文字列を数値に変換する
+
+        ; 数値をセットする
 
         CALL    rPopReg                 ; レジスタ取得
         RET
@@ -585,10 +610,90 @@ sysList:
         CALL    libPutsNoCRLF
         JMP     .aPrintNext
 .aPrintChar:                            ; 文字 16進表示
+        MOV WORD BP, [.aStruct_p]       ; 16進2文字
+        ADD     BP, 10
+        MOV BYTE AH, [BP]
+        MOV     SI, .aTmp_string
+        MOV     BH, 0x01                ; "0x"あり
+        CALL    libitob                 ; 数値→文字列
+        MOV     BP, .aTmp_string
+        CALL    libPutsNoCRLF
         JMP     .aPrintNext
 .aPrintArray:                           ; 配列 16進表示の繰り返し
+        MOV WORD BP, [.aStruct_p]       ; 16進4文字の繰り返し
+        ADD     BP, 10
+        MOV BYTE AH, [BP]
+        PUSH    AX
+        INC     BP                      ; 現在BP = .aStruct_p + 11
+        PUSH    BP
+
+        MOV     AL, "{"                 ; 最初の括弧
+        CALL    libPutchar
+        CALL    libSetCursolNextCol
+.aPrintArrayLoop:
+        ; この時点で BPには変数の先頭ポインタ
+        MOV WORD AX, [BP]
+        MOV     SI, .aTmp_string
+        MOV     BH, 0x01                ; "0x"あり
+        CALL    libitox                 ; 数値→文字列
+        MOV     BP, .aTmp_string        ; BPはPUSHしているので捨てて良い
+        CALL    libPutsNoCRLF
+
+        POP     BP                      ; BP, AH更新
+        POP     AX
+        DEC     AH
+        ADD     BP, 2
+        PUSH    AX
+        PUSH    BP
+
+        CMP     AH, 0x00
+        JZ      .aPrintArrayNext        ; 回数をこなしたら終了
+        MOV     AL, ","
+        CALL    libPutchar
+        CALL    libSetCursolNextCol
+        MOV     AL, " "
+        CALL    libPutchar
+        CALL    libSetCursolNextCol
+        JMP     .aPrintArrayLoop        ; 要素数だけ繰り返す
+
+.aPrintArrayNext:
+        POP     BP
+        POP     AX
+
+        MOV     AL, "}"                 ; 最後の括弧とじ
+        CALL    libPutchar
+        CALL    libSetCursolNextCol
+
         JMP     .aPrintNext
 .aPrintString:                          ; 文字列 文字表示
+        MOV WORD BP, [.aStruct_p]
+        ADD     BP, 10
+        MOV BYTE AH, [BP]
+
+        MOV     AL, 0x22                ; 最初の "
+        CALL    libPutchar
+        CALL    libSetCursolNextCol
+.aPrintStringLoop:
+        ; この時点で BPには文字列の先頭ポインタ、 AHには残り表示文字数
+        MOV BYTE AL, [BP]               ; 1文字表示
+        CALL    libPutchar
+        CALL    libSetCursolNextCol
+
+        DEC     AH                      ; 次の1文字にフォーカス
+        INC     BP
+
+        ; null文字が来るか、変数の最後まで到達したら終わり
+        CMP     AH, 0x00
+        JZ      .aPrintStringNext       ; 回数をこなしたら終了
+        CMP     AL, 0x00
+        JZ      .aPrintStringNext       ; null文字が来たら終了
+        JMP     .aPrintStringLoop       ; 要素数だけ繰り返す
+
+.aPrintStringNext:
+
+        MOV     AL, 0x22                ; 最後の "
+        CALL    libPutchar
+        CALL    libSetCursolNextCol
         JMP     .aPrintNext
 .aPrintError:                           ; 異常値 一旦無限ループ
         JMP     .aPrintError

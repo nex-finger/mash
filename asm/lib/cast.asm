@@ -5,12 +5,56 @@
 %ifndef     __CAST_ASM
 %define     __CAST_ASM
 
+; 1バイト変数を16進文字列へ変換
+; Int -> heX
+; in  : AH      変換元の1バイト即値
+;       BH      0: 0xなし
+;               1: 0xあり
+; i/o : SI      変換結果を格納する先頭アドレス(最大5バイト消費)
+libitob:
+        CALL    rPushReg
+
+        MOV BYTE [.aInput], AH
+
+        CMP     BH, 0x00                ; "0x"つけるか確認
+        JZ      .null_set               ; なし
+        MOV BYTE [SI], "0"              ; あり
+        INC     SI
+        MOV BYTE [SI], "x"
+        INC     SI
+
+.null_set:
+        ADD     SI, 2                   ; null文字セット
+        MOV BYTE [SI], 0x00
+        SUB     SI, 2
+
+        ; 1文字目
+        MOV BYTE AH, [.aInput]
+        AND     AH, 0xf0
+        SHR     AH, 4
+        CALL    ritox1digit
+        MOV BYTE [SI], AL
+        INC     SI
+
+        ; 2文字目
+        MOV     AX, [.aInput]
+        AND     AX, 0x0f
+        CALL    ritox1digit
+        MOV BYTE [SI], AL
+        INC     SI
+
+.exit:
+        CALL    rPopReg
+        RET
+.aInput:
+        DB      0x00
+
 ; 2バイト変数を16進文字列へ変換
 ; Int -> heX
 ; in  : AX      変換元の2バイト即値
 ;       BH      0: 0xなし
 ;               1: 0xあり
-; i/o : SI      変換結果を格納する先頭アドレス(5バイト消費)
+; i/o : SI      変換結果を格納する先頭アドレス(最大7バイト消費)
 libitox:
         CALL    rPushReg
 
@@ -80,7 +124,7 @@ libitox:
 ; -32768は表示不可(-32767～+32767)
 ; Int -> Decimal
 ; in  : AX      変換元の2バイト即値
-; i/o : SI      変換結果を格納する先頭アドレス(8バイト消費)
+; i/o : SI      変換結果を格納する先頭アドレス(最大7バイト消費)
 libitod:
         CALL    rPushReg
 

@@ -105,7 +105,7 @@ secMemChk:
         MOV     DH, [secCursolY]
         MOV     BP, .preMsg
         INT     0x10
-        ADD BYTE[secCursolX], 0x0e        
+        ADD BYTE[secCursolX], 0x0e       
 
         MOV     SI, 0x0000              ; カウント初期化
 .chkLoop:
@@ -154,7 +154,7 @@ secDiskChk:
         MOV     DH, [secCursolY]
         MOV     BP, .preMsg
         INT     0x10
-        ADD BYTE[secCursolX], 0x0c
+        ADD BYTE[secCursolX], 0x0c   
 
         MOV     DX, 0x0000              ; ループ変数初期化
 .chkLoop:
@@ -204,7 +204,7 @@ secLoadShell:
         MOV     DH, [secCursolY]
         MOV     BP, .preMsg
         INT     0x10
-        ADD BYTE[secCursolX], 0x0f
+        ADD BYTE[secCursolX], 0x0f    
 
         MOV     DX, 0x0003              ; LBA 3~18 の16セクタを 0x0000:0x4000 に展開
         CALL    lbaToChs
@@ -425,6 +425,30 @@ putBeep:
         INT     0x10
         RET
 
+; 50ms待機する(理由はかっこいいから)
+wait50msec:
+        PUSH    AX
+        PUSH    BX
+        PUSH    CX
+        PUSH    DX
+
+        MOV     AX, 0x0000
+        INT     0x1a
+        MOV     BX, DX
+.wait_loop:
+        MOV     AX, 0x0000
+        INT     0x1a
+        CMP     DX, BX
+        JZ      .wait_loop
+
+        POP     DX
+        POP     CX
+        POP     BX
+        POP     AX
+
+        RET
+
 ; --- 0埋め ---
 secEnd:
-        times 2048-($-$$) DB 0          ; セカンダリローダは4セクタ
+        ;times 2048-($-$$) DB 0          ; セカンダリローダは4セクタ
+        times 1024-($-$$) DB 0          ; セカンダリローダは2セクタ 2025.12.10変更
