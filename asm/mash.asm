@@ -156,8 +156,12 @@ mashInit:
         MOV     SI, .aTestValue01
         CALL    sysDim                  ; 定義
 
-        MOV     AH, 0x02                ; テスト変数
+        MOV     AH, 0x01                ; テスト変数
         MOV     SI, .aTestValue02
+        CALL    sysDim                  ; 定義
+
+        MOV     AH, 0x02                ; テスト変数
+        MOV     SI, .aTestValue03
         CALL    sysDim                  ; 定義
 
         CALL    sysList                 ; 一覧表示
@@ -203,6 +207,8 @@ mashInit:
         DB      "test01  "
 .aTestValue02:
         DB      "test02  "
+.aTestValue03:
+        DB      "test03  "
 
 ; //////////////////////////////////////////////////////////////////////////// ;
 ; --- ループプログラム ---
@@ -562,15 +568,6 @@ sysList:
         MOV     BP, .aTmp_long
         CALL    libsParseNoCRLF
 
-; デバッグ---->
-.DebugChk:
-        PUSH    AX
-        MOV BYTE AH, [.DebugCnt]
-        CMP     AH, 0x00
-        JNZ     .DebugChk
-        POP     AX
-; <----
-
         MOV     BP, .aSample_tab        ; タブ
         CALL    libsParseNoCRLF        
 
@@ -634,16 +631,18 @@ sysList:
 .aPrintUint:                            ; 符号なし16ビット 16進表示
         MOV     BP, .aSample_preHex     ; "0x"
         CALL    libsParseNoCRLF
-        MOV WORD AX, [.aStruct_p]       ; 16進4文字
-        ADD     AX, 10
+        MOV WORD BP, [.aStruct_p]       ; 16進4文字
+        ADD     BP, 10
+        MOV WORD AX, [BP]
         MOV     SI, .aTmp_long
         CALL    libitox                 ; 数値→文字列
         MOV     BP, .aTmp_long
         CALL    libsParseNoCRLF
         JMP     .aPrintNext
 .aPrintSint:                            ; 符号あり16ビット 10進表示
-        MOV WORD AX, [.aStruct_p]       ; 10進8文字
-        ADD     AX, 10
+        MOV WORD BP, [.aStruct_p]       ; 10進8文字
+        ADD     BP, 10
+        MOV WORD AX, [BP]
         MOV     SI, .aTmp_string
         CALL    libitod                 ; 数値→文字列
         MOV     BP, .aTmp_string
@@ -674,7 +673,7 @@ sysList:
         SUB     AX, 2                   ; チェーンは変数構造体の末尾2バイト
         MOV     BP, AX
 
-        ; 確保メモリ確認 ---->
+        ; メモリ確認 ---->
         ;PUSH    AX
         ;MOV     AX, [BP]
         ;CALL    dbgPrint16bit           ; デバッグ
