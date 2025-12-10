@@ -103,56 +103,19 @@ mashInit:
         MOV     ES, AX
         MOV     SP, 0x3fff              ; ｾｸﾞﾎﾟ
 
-        CALL    rInitMalloc
-        
-%ifdef __DEBUG
-        ; AX, BX, CX, DX, SI, DI, BP, SP, DS, ES, SS
-        ;MOV     AX, 0x1234
-        ;MOV     BX, 0x2345
-        ;MOV     CX, 0x3456
-        ;MOV     DX, 0x4567
-        ;MOV     SI, 0x5678
-        ;MOV     DI, 0x6789
-        ;MOV     BP, 0x789a
-%endif
-
-        CALL    dbgRegDump
-
-%ifdef __DEBUG
-        ;MOV     AX, 0x0000
-        ;MOV     DS, AX
-        ;MOV     SS, AX
-        ;MOV     ES, AX
-%endif
+        CALL    rInitMalloc             ; 動的確保メモリ初期化
 
         CALL    cmdVer                  ; ロゴ+版数表示
 
-%ifdef __DEBUG
-        ; スクロールテスト
-;.dbgLoop:
-        ;MOV     AH, 0x00
-        ;INT     0x16
+        MOV WORD [sTopValAddr], 0x0000  ; 変数チェーン初期化
 
-        ;MOV     AH, 0x06
-        ;MOV     AL, 0x01
-        ;MOV     BH, 0x07
-        ;MOV     CX, 0x0000
-        ;MOV     DH, 24
-        ;MOV     DL, 79
-        ;INT     0x10
-
-        ;JMP     .dbgLoop
-%endif
-
-        MOV WORD [sTopValAddr], 0x0000       ; 初期化
-
-        ; 番兵
+        ; 番兵変数定義
         MOV     AH, 0x00
         MOV     SI, .aInitialValue
         CALL    sysDim
 
         ; デバッグ ---->
-        MOV     AH, 0x01                ; テスト変数
+        MOV     AH, 0x00                ; テスト変数
         MOV     SI, .aTestValue01
         CALL    sysDim                  ; 定義
 
@@ -166,38 +129,6 @@ mashInit:
 
         CALL    sysList                 ; 一覧表示
         ; <----
-
-%ifdef __DEBUG_DONE
-        ; 番兵のシェル変数を設定
-        MOV     CX, 0x0010
-        CALL    sysMalloc
-
-        MOV WORD [sTopValAddr], BP      ; 変数の先頭アドレス
-
-        MOV BYTE [BP], 14
-
-        ADD     BP, 1                   ; sTopValAddr + 1
-
-        MOV BYTE [BP], 0x00             ; 変数型
-
-        ADD     BP, 1                   ; sTopValAddr + 2
-
-        MOV     SI, .aInitialValue
-        MOV     DI, BP
-        MOV     CX, 8
-        CALL    libMemcpy               ; 変数名
-
-        ADD     BP, 8                   ; sTopValAddr + 10
-
-        MOV WORD [BP], 0x1234           ; 変数値
-
-        ADD     BP, 2                   ; sTopValAddr + 12
-
-        MOV WORD [BP], 0x0000           ; 次の変数アドレス(null設定)
-
-        ; デバッグ
-        DEBUG_REGISTER_DUMP 16, [sTopValAddr]
-%endif
         
         JMP     mashLoop                ; ループ処理へ移行
 
@@ -555,7 +486,10 @@ sysList:
         MOV BYTE [BP], 0x00             ; 変数文字列の最後をnullに
 
         MOV     BP, .aLabel_intro
-        CALL    libsParse               ; 説明分表示
+        CALL    libsParseNoCRLF         ; 説明文表示(sParse必須)
+
+        MOV     BP, .aLabel_newest
+        CALL    libsParseNoCRLF         ; 説明文表示(sParse必須)
 
         MOV     SI, [sTopValAddr]       ; 変数構造体のポインタを取得する
         MOV WORD [.aStruct_p], SI
@@ -566,7 +500,10 @@ sysList:
         MOV     SI, .aTmp_long
         CALL    libitox
         MOV     BP, .aTmp_long
-        CALL    libsParseNoCRLF
+        CALL    libPutsNoCRLF
+        
+        MOV     BP, .aSample_colon
+        CALL    libPutsNoCRLF    
 
         MOV     BP, .aSample_tab        ; タブ
         CALL    libsParseNoCRLF        
@@ -602,7 +539,7 @@ sysList:
 .cmp_error:                             ; 一旦エラー処理はなし
 .cmp_exit:
         MOV BYTE [.aStruct_type], AH
-        CALL    libsParseNoCRLF
+        CALL    libPutsNoCRLF
 
         MOV     BP, .aSample_tab        ; タブ
         CALL    libsParseNoCRLF
@@ -611,9 +548,9 @@ sysList:
         ADD     SI, 2
         MACRO_MEMCPY .aTmp_string, SI, 8
         MOV     BP, .aTmp_string
-        CALL    libsParseNoCRLF
+        CALL    libPutsNoCRLF
 
-        MOV     BP, .aSample_tab        ; タブ
+        MOV     BP, .aSample_space      ; 空白(タブだと離れすぎ)
         CALL    libsParseNoCRLF
 
         MOV BYTE AH, [.aStruct_type]    ; 値を表示
@@ -629,15 +566,14 @@ sysList:
         JZ      .aPrintString
         JMP     .aPrintError
 .aPrintUint:                            ; 符号なし16ビット 16進表示
-        MOV     BP, .aSample_preHex     ; "0x"
-        CALL    libsParseNoCRLF
         MOV WORD BP, [.aStruct_p]       ; 16進4文字
         ADD     BP, 10
         MOV WORD AX, [BP]
-        MOV     SI, .aTmp_long
+        MOV     SI, .aTmp_string
+        MOV     BH, 0x01                ; "0x"あり
         CALL    libitox                 ; 数値→文字列
-        MOV     BP, .aTmp_long
-        CALL    libsParseNoCRLF
+        MOV     BP, .aTmp_string
+        CALL    libPutsNoCRLF
         JMP     .aPrintNext
 .aPrintSint:                            ; 符号あり16ビット 10進表示
         MOV WORD BP, [.aStruct_p]       ; 10進8文字
@@ -646,7 +582,7 @@ sysList:
         MOV     SI, .aTmp_string
         CALL    libitod                 ; 数値→文字列
         MOV     BP, .aTmp_string
-        CALL    libsParseNoCRLF
+        CALL    libPutsNoCRLF
         JMP     .aPrintNext
 .aPrintChar:                            ; 文字 16進表示
         JMP     .aPrintNext
@@ -687,14 +623,18 @@ sysList:
         ;MOV BYTE [.DebugCnt], 0x01 ;デバッグ
         JMP     .listLoop
 
-.DebugCnt:
-        DB      0x00
-
 .exit:
+        MOV     BP, .aLabel_oldest
+        CALL    libsParseNoCRLF         ; 説明文表示(sParse必須)
+
         CALL    rPopReg                 ; レジスタ取得
         RET
 .aLabel_intro:                          ; １行目の説明
-        DB      "ADDRESS\tTYPE\tNAME\tVALUE", 0x00
+        DB      "ADDRESS\tTYPE\tNAME\t VALUE\n", 0x00
+.aLabel_newest:                         ; ２行目の説明
+        DB      "(", 0x18, " faster-hot!!)\n", 0x00
+.aLabel_oldest:                         ; 最終行の説明
+        DB      "(", 0x19, " slower-cold...)\n", 0x00
 .aLabel_uint:
         DB      "uint16", 0x00
 .aLabel_array:
@@ -705,12 +645,14 @@ sysList:
         DB      "char", 0x00
 .aLabel_string:
         DB      "string", 0x00
-.aSample_preHex:
-        DB      "0x", 0x00
 .aSample_tab:
         DB      "\t", 0x00
 .aSample_next:
         DB      "\n", 0x00
+.aSample_space:
+        DB      " ", 0x00
+.aSample_colon:
+        DB      ":", 0x00
 .aStruct_p:                             ; 変数構造体のポインタ
         DW      0x0000
 .aStruct_type:                          ; 変数の型
@@ -1060,14 +1002,14 @@ libsParseNoCRLF:
         CMP     AL, "t"
         JNZ     .lf
 .tabLoop:
+        MOV     AL, " "
+        CALL    libPutchar
+        CALL    libSetCursolNextCol
+
         MOV BYTE AH, [sXpos]
         AND     AH, 0x07
         CMP     AH, 0x00
         JZ      .tabNext
-
-        MOV     AL, " "
-        CALL    libPutchar
-        CALL    libSetCursolNextCol
         JMP     .tabLoop
 .tabNext:
         JMP     .parseend

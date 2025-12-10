@@ -8,11 +8,22 @@
 ; 2バイト変数を16進文字列へ変換
 ; Int -> heX
 ; in  : AX      変換元の2バイト即値
-; i/o   SI      変換結果を格納する先頭アドレス(5バイト消費)
+;       BH      0: 0xなし
+;               1: 0xあり
+; i/o : SI      変換結果を格納する先頭アドレス(5バイト消費)
 libitox:
         CALL    rPushReg
 
         MOV WORD [.aInput], AX
+
+        CMP     BH, 0x00                ; "0x"つけるか確認
+        JZ      .null_set               ; なし
+        MOV BYTE [SI], "0"              ; あり
+        INC     SI
+        MOV BYTE [SI], "x"
+        INC     SI
+
+.null_set:
         ADD     SI, 4                   ; null文字セット
         MOV BYTE [SI], 0x00
         SUB     SI, 4
@@ -92,17 +103,24 @@ libitod:
         SUB     AX, 0x8000
         MOV WORD [.inValue], AX         ; 絶対値セット
         JMP     .sign_next
-.sign_minus:                            ; 1文字目は"-"、絶対値は not(in)+1
+.sign_minus:                            ; 1文字目は"-"、絶対値は not(in)-7fff
         MOV WORD BP, [.inAddress]
         MOV BYTE [BP], "-"              ; 1文字目セット
         INC     BP
         MOV WORD [.inAddress], BP       ; シーク
         MOV WORD AX, [.inValue]
         NOT     AX
-        INC     AX
+        SUB     AX, 0x7fff
         MOV WORD [.inValue], AX         ; 絶対値セット
         JMP     .sign_next
 .sign_next:
+        ; メモリ確認 ---->
+        PUSH    AX
+        MOV WORD AX, [.inValue]
+        CALL    dbgPrint16bit           ; デバッグ
+        POP     AX
+        ; <----
+
         ; 絶対値から2文字目以降代入(値により2文字目が何を指すかわからない)
         MOV WORD [.aDigit], 10000       ; 最初は10000の位から
         MOV     CX, 0x0005              ; 5回ループ(最大で10進5桁のため)

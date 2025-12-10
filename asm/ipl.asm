@@ -40,16 +40,16 @@ iplEntry:
 ; --- セカンダリローダ用意 ---
 		MOV		BX, 0x0000		; 0x0000:8000に展開
 		MOV		ES, BX
-		MOV		BX, 0x8000
+		MOV		BX, 0xfc00
 		MOV		AH, 0x02
-		MOV		AL, 0x04		; セカンダリローダは4セクタ
+		MOV		AL, 0x02		; セカンダリローダは2セクタ 4→2に変更
 		MOV		CH, 0x00		; シリンダ0
 		MOV		CL, 0x02		; セクタ2
 		MOV		DH, 0x00		; ヘッド0
 		MOV		DL, 0x00		; ドライブA
 		INT		0x13
 		JC		iplErr			; 失敗
-		JMP		0x0000:0x8000	; 成功
+		JMP		0x0000:0xfc00	; 成功
 
 ; --- ロード失敗 ---
 iplErr:

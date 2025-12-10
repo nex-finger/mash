@@ -1,7 +1,7 @@
 ; second
 ; TAB=4
 
-        ORG     0x8000
+        ORG     0xfc00
         JMP     secMain
 
 ; --- 定数 ---
@@ -128,8 +128,8 @@ secMemChk:
         SUB BYTE[secCursolX], 0x06      ; 繰り返すので戻す
         INC     SI
 
-        CMP     SI, 0x8000
-        JNZ     .chkLoop                ; 0x7fff まで読んだら終わり
+        CMP     SI, 0xfc00
+        JNZ     .chkLoop                ; 0xffff まで読んだら終わり
 .chkDone:
         ADD BYTE[secCursolX], 0x07      ; 次の表示のため
         CALL    printDone
@@ -206,7 +206,7 @@ secLoadShell:
         INT     0x10
         ADD BYTE[secCursolX], 0x0f
 
-        MOV     DX, 0x0005              ; LBA 5~20 の16セクタを 0x0000:0x4000 に展開
+        MOV     DX, 0x0003              ; LBA 3~18 の16セクタを 0x0000:0x4000 に展開
         CALL    lbaToChs
 
         MOV     AX, 0x0000
