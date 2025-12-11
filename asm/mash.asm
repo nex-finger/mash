@@ -1161,8 +1161,13 @@ rInputCommand:
 rInputParseToken:
         CALL    rPushReg                ; レジスタ退避
 
+.token_loop:                            ; バッファが枯れるまでループ
         MOV     AH, " "
         CALL    libStrtok
+                PUSH    AX
+                MOV WORD AX, DI
+                CALL    dbgPrint16bit           ; デバッグ
+                POP     AX
 
         ; デバッグ表示 ---->
                 PUSH    BP
@@ -1171,17 +1176,12 @@ rInputParseToken:
                 POP     BP
         ; <----
 
-        MOV     AH, " "
+        CMP     AL, 0x00
+        JZ      .exit
         MOV     SI, _NULL
-        CALL    libStrtok
+        JMP     .token_loop
 
-        ; デバッグ表示 ---->
-                PUSH    BP
-                MOV     BP, DI
-                CALL    libPuts
-                POP     BP
-        ; <----
-
+.exit:
         CALL    rPopReg                 ; レジスタ取得
         RET
 

@@ -43,23 +43,21 @@ libStrchr:
 ; in  : SI      null: 続行
 ;               null以外: 新規文字列先頭ポインタ
 ;       AH      区切り文字
-; out : DI      null: 区切る文字列はない
-;               null以外: 区切った文字列先頭ポインタ
+; out : DI      区切った文字列先頭ポインタ
+;       AL      0x00: 文字列の最後まで区切った
+;               0x01: また文字列が残っている
 ; SI!=null の場合、SIから新しく文字列を分割する
 ; SI==null の場合、前回保持したポインタから続行する
 libStrtok:
         CALL    rPushReg
 
-                PUSH    AX
-                MOV WORD AX, [.aHoldAddr]
-                CALL    dbgPrint16bit           ; デバッグ
-                POP     AX
+        MOV BYTE [.aRetAL], 0x01
 
         CMP     SI, _NULL
         JZ      .inputNull
         JMP     .inputNotNull
 .inputNull:                             ; 入力パラメータがnullなら前回から続行
-        MOV WORD BP, .aHoldAddr
+        MOV WORD BP, [.aHoldAddr]
         JMP     .mainLoop1
 .inputNotNull:                          ; 入力パラメータがnullでないなら新規
         MOV WORD BP, SI
@@ -74,16 +72,18 @@ libStrtok:
         INC     BP
         JMP     .mainLoop1
 .mainNext1:                             ; 戻り値設定
-        MOV WORD [.aRet], BP
+        MOV WORD [.aRetDI], BP
 
 .mainLoop2:                             ; 区切り文字が「発見できるまで」進む
         MOV BYTE BH, [BP]
         CMP     BH, AH
         JZ      .mainNext2              ; 区切り文字でたら脱出
         CMP     BH, 0x00
-        JZ      .mainNext2              ; nullがきても脱出(エラー)
+        JZ      .mainNext2null          ; nullがきても脱出(エラー)
         INC     BP
         JMP     .mainLoop2
+.mainNext2null:
+        MOV BYTE [.aRetAL], 0x00
 .mainNext2:                             ; static変数に格納
         MOV BYTE [BP], 0x00             ; 終端文字追加
         INC     BP
@@ -91,18 +91,17 @@ libStrtok:
         JMP     .exit
         
 .errorNext:
-        MOV WORD [.aRet], 0x0000
+        MOV BYTE [.aRetAL], 0x00
+        MOV WORD [.aRetDI], 0x0000
         JMP     .exit
 .exit:
-                PUSH    AX
-                MOV WORD AX, [.aRet]
-                CALL    dbgPrint16bit           ; デバッグ
-                POP     AX
-
         CALL    rPopReg
-        MOV WORD DI, [.aRet]
+        MOV WORD DI, [.aRetDI]
+        MOV BYTE AL, [.aRetAL]
         RET
-.aRet:                                  ; 戻り値
+.aRetDI:                                ; 戻り値
         DW      0x0000
+.aRetAL:                                ; 戻り値
+        DB      0x00
 .aHoldAddr:                             ; 前回の保持アドレス
         DW      0x0000
