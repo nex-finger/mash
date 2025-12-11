@@ -69,6 +69,27 @@
         POP     DI
 %endmacro
 
+; memcmp
+; AX: 比較結果
+; %1 str1(比較対象1)
+; %2 str2(比較対象2)
+; %3 size(比較バイト数)
+%macro MACRO_MEMCMP 3
+        PUSH    SI
+        PUSH    DI
+        PUSH    CX
+
+        MOV     SI, %1
+        MOV     DI, %2
+        MOV     CX, %3
+
+        CALL    libMemcmp
+
+        POP     CX
+        POP     DI
+        POP     SI
+%endmacro
+
 ; strchr
 ; %1 str(検索する先頭アドレス)
 ; %2 c(検索する文字)

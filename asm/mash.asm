@@ -115,29 +115,83 @@ mashInit:
         CALL    sysDim
 
         ; デバッグ ---->
-        MOV     AH, 0x00                ; テスト変数
-        MOV     SI, .aTestValue01
-        CALL    sysDim                  ; 定義
+                MOV     AH, 0x00                ; テスト変数
+                MOV     SI, .aTestValue01
+                CALL    sysDim                  ; 定義
 
-        MOV     AH, 0x10                ; テスト変数
-        MOV     AL, 3                   ; 要素数は3
-        MOV     SI, .aTestValue02
-        CALL    sysDim                  ; 定義
+                MOV     AH, 0x10                ; テスト変数
+                MOV     AL, 3                   ; 要素数は3
+                MOV     SI, .aTestValue02
+                CALL    sysDim                  ; 定義
 
-        MOV     AH, 0x01                ; テスト変数
-        MOV     SI, .aTestValue03
-        CALL    sysDim                  ; 定義
+                MOV     AH, 0x01                ; テスト変数
+                MOV     SI, .aTestValue03
+                CALL    sysDim                  ; 定義
 
-        MOV     AH, 0x02                ; テスト変数
-        MOV     SI, .aTestValue04
-        CALL    sysDim                  ; 定義
+                MOV     AH, 0x02                ; テスト変数
+                MOV     SI, .aTestValue04
+                CALL    sysDim                  ; 定義
 
-        MOV     AH, 0x12                ; テスト変数
-        MOV     AL, 3                   ; 要素数は3
-        MOV     SI, .aTestValue05
-        CALL    sysDim   
+                MOV     AH, 0x12                ; テスト変数
+                MOV     AL, 3                   ; 要素数は3
+                MOV     SI, .aTestValue05
+                CALL    sysDim   
 
-        CALL    sysList                 ; 一覧表示
+                CALL    sysList                 ; 一覧表示
+
+                ; 比較結果確認 ---->
+                        ;MOV     SI, .aTestValue03
+                        ;MOV     DI, .aTestValue05
+                        ;MACRO_MEMCMP SI, DI, 8
+                        ;CALL    dbgPrint16bit           ; デバッグ
+                ;.dbgLoop:
+                        ;JMP     .dbgLoop
+                ; <----
+
+                ; メモリ確認 ---->
+                        PUSH    AX
+                        PUSH    SI
+                        PUSH    DI
+
+                        MOV     SI, .aInitialValue
+                        CALL    rShellGet               ; 戻り値はDI
+                        MOV     AX, DI
+                        CALL    dbgPrint16bit           ; デバッグ
+
+                        MOV     SI, .aTestValue01
+                        CALL    rShellGet               ; 戻り値はDI
+                        MOV     AX, DI
+                        CALL    dbgPrint16bit           ; デバッグ
+
+                        MOV     SI, .aTestValue02
+                        CALL    rShellGet               ; 戻り値はDI
+                        MOV     AX, DI
+                        CALL    dbgPrint16bit           ; デバッグ
+
+                        MOV     SI, .aTestValue03
+                        CALL    rShellGet               ; 戻り値はDI
+                        MOV     AX, DI
+                        CALL    dbgPrint16bit           ; デバッグ
+
+                        MOV     SI, .aTestValue04
+                        CALL    rShellGet               ; 戻り値はDI
+                        MOV     AX, DI
+                        CALL    dbgPrint16bit           ; デバッグ
+
+                        MOV     SI, .aTestValue04
+                        CALL    rShellGet               ; 戻り値はDI
+                        MOV     AX, DI
+                        CALL    dbgPrint16bit           ; デバッグ
+
+                        MOV     SI, mashLoop
+                        CALL    rShellGet               ; 戻り値はDI
+                        MOV     AX, DI
+                        CALL    dbgPrint16bit           ; デバッグ
+
+                        POP     DI
+                        POP     SI
+                        POP     AX
+                ; <----
         ; <----
         
         JMP     mashLoop                ; ループ処理へ移行
@@ -291,15 +345,15 @@ sysDim:
         CALL    rPushReg                ; レジスタ退避
 
         ; 確保メモリ確認 ---->
-        ;PUSH    AX
-        ;MOV WORD AX, 0x0001
-        ;CALL    dbgPrint16bit           ; デバッグ
-        ;POP     AX
+                ;PUSH    AX
+                ;MOV WORD AX, 0x0001
+                ;CALL    dbgPrint16bit           ; デバッグ
+                ;POP     AX
 
-        ;PUSH    AX
-        ;MOV WORD AX, SI
-        ;CALL    dbgPrint16bit           ; デバッグ
-        ;POP     AX
+                ;PUSH    AX
+                ;MOV WORD AX, SI
+                ;CALL    dbgPrint16bit           ; デバッグ
+                ;POP     AX
         ; <----
 
         MOV BYTE [.aRet], RET_OK        ; 戻り値設定
@@ -309,13 +363,13 @@ sysDim:
         MOV BYTE [.aLen], AL            ; 使わない型の場合参照しないので一旦入れておく
 
         ; デバッグ ---->
-        DEBUG_REGISTER_DUMP 8, SI
+                ;DEBUG_REGISTER_DUMP 8, SI
         ; <----
 
         MACRO_MEMCPY .aName, SI, 8
 
         ; デバッグ ---->
-        DEBUG_REGISTER_DUMP 8, .aName
+                ;DEBUG_REGISTER_DUMP 8, .aName
         ; <----
 
         ; 変数を記録するメモリサイズを計算する
@@ -380,27 +434,27 @@ sysDim:
         MOV WORD [.aNext], SI
 
         ; 確保メモリ確認 ---->
-        PUSH    AX
-        MOV WORD AX, 0x0002
-        CALL    dbgPrint16bit           ; デバッグ
-        POP     AX
+                ;PUSH    AX
+                ;MOV WORD AX, 0x0002
+                ;CALL    dbgPrint16bit           ; デバッグ
+                ;POP     AX
 
-        PUSH    AX
-        MOV WORD AX, [.aAddr]
-        CALL    dbgPrint16bit           ; デバッグ
-        POP     AX
+                ;PUSH    AX
+                ;MOV WORD AX, [.aAddr]
+                ;CALL    dbgPrint16bit           ; デバッグ
+                ;POP     AX
         ; <----
 
         ; チェーン確認 ---->
-        PUSH    AX
-        MOV WORD AX, 0x0003
-        CALL    dbgPrint16bit           ; デバッグ
-        POP     AX
+                ;PUSH    AX
+                ;MOV WORD AX, 0x0003
+                ;CALL    dbgPrint16bit           ; デバッグ
+                ;POP     AX
 
-        PUSH    AX
-        MOV WORD AX, [.aNext]
-        CALL    dbgPrint16bit           ; デバッグ
-        POP     AX
+                ;PUSH    AX
+                ;MOV WORD AX, [.aNext]
+                ;CALL    dbgPrint16bit           ; デバッグ
+                ;POP     AX
         ; <----
 
 .fill_common1:                          ; 代入処理(共通)
@@ -489,14 +543,6 @@ sysSet:
         ; シェルから入力された文字列を数値に変換する
 
         ; 数値をセットする
-
-        CALL    rPopReg                 ; レジスタ取得
-        RET
-
-; get コマンド
-; シェル変数の値を取得する
-sysGet:
-        CALL    rPushReg                ; レジスタ退避
 
         CALL    rPopReg                 ; レジスタ取得
         RET
@@ -1359,6 +1405,69 @@ cmdVer:
         INC BYTE [sYpos]
         CALL    rPopReg                 ; レジスタ取得
         RET
+
+; シェル変数を検索し、先頭ポインタを返却する
+; in  : SI      検索する変数名
+; out : DI      null以外: 発見した変数ポインタ
+;               null: 見つからなかった
+rShellGet:
+        CALL    rPushReg                ; レジスタ退避
+
+        MACRO_MEMCPY .inName, SI, 8     ; 入力文字列を0埋め8バイトに格納
+        MOV     BH, 0x00                ; null来たら 0x01 になる
+        MOV     BP, .inName
+        MOV     CX, 0x0000
+.inputLoop:
+        MOV BYTE AH, [BP]
+        CMP     AH, 0x00
+        JNZ     .inputNotNull           ; nullじゃないなら変化なし(過去にnullが来ていてもフラグは保持)
+        MOV     BH, 0x01                ; nullならフラグ立てる
+.inputNotNull:
+        CMP     BH, 0x00
+        JZ      .inputNullFillNext
+        MOV BYTE [BP], 0x20
+.inputNullFillNext:
+        INC     BP
+        INC     CX
+        CMP     CX, 0x0008              ; 変数型は8文字で終了
+        JNZ     .inputLoop
+
+        MOV WORD BP, [sTopValAddr]      ; 変数チェーンの先頭から文字列が一致するまで検索する
+        MOV     BX, 0x0000
+.searchLoop:
+        MOV BYTE BL, [BP]               ; 変数サイズ取得
+        ADD     BP, 2                   ; 変数名先頭ポインタ = BP + 2
+
+        MACRO_MEMCMP BP, .inName, 8     ; AXに比較結果
+
+        CMP     AX, 0x0000
+        JZ      .discoverValue          ; 文字列一致
+        SUB     BP, 2
+
+        ADD     BP, BX                  ; 次の変数ポインタを確認
+        SUB     BP, 2
+        MOV WORD BP, [BP]
+
+        CMP     BP, _NULL
+        JZ      .noDiscoverValue        ; チェーンの最後まで見つからなかった
+        JMP     .searchLoop             ; まだチェーンの途中なので次行く
+
+.discoverValue:                         ; 発見できた
+        SUB     BP, 2                   ; BPを次の変数ポインタから先頭に戻す
+        MOV WORD [.aRet], BP
+        JMP     .exit
+.noDiscoverValue:                       ; 発見できなかった
+        MOV WORD [.aRet], 0x0000
+        JMP     .exit
+
+.exit:
+        CALL    rPopReg                 ; レジスタ取得
+        MOV WORD DI, [.aRet]
+        RET
+.inName:                                ; 変数名(空白埋め8文字+番兵のnull)
+        DB      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+.aRet:                                  ; 戻り値
+        DW      0x0000
         
 ; 全レジスタの退避
 ; 呼んだあと必ず rPopReg を呼ぶこと
@@ -1442,6 +1551,8 @@ dbgSingle:
 
         CALL    rPopReg                 ; レジスタ取得
         RET
+
+
 
 ; デバッグ用ダンプ
 ; COM1を使って指定番地から指定バイトをダンプする
@@ -1587,6 +1698,7 @@ dbgPrint16bit:
         
         MOV     SI, .aDebugStr
 
+        MOV     BX, 0x00                ; "0x"なし
         CALL    libitox                 ; AXレジスタの値を4文字に変換
 
         MOV     CX, 0x0000
