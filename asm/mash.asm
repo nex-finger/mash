@@ -45,7 +45,7 @@ cVersionLen:                            ; 版数文字列の長さ
         DW      18
 
 cVersionStr:                            ; 版数文字列の内容
-        DB      "mash system v0.2.1"
+        DB      "mash system v0.3.2"
 
 ; //////////////////////////////////////////////////////////////////////////// ;
 ; --- 変数 ---
@@ -137,61 +137,7 @@ mashInit:
                 MOV     SI, .aTestValue05
                 CALL    sysDim   
 
-                CALL    sysList                 ; 一覧表示
-
-                ; 比較結果確認 ---->
-                        ;MOV     SI, .aTestValue03
-                        ;MOV     DI, .aTestValue05
-                        ;MACRO_MEMCMP SI, DI, 8
-                        ;CALL    dbgPrint16bit           ; デバッグ
-                ;.dbgLoop:
-                        ;JMP     .dbgLoop
-                ; <----
-
-                ; メモリ確認 ---->
-                        PUSH    AX
-                        PUSH    SI
-                        PUSH    DI
-
-                        MOV     SI, .aInitialValue
-                        CALL    rShellGet               ; 戻り値はDI
-                        MOV     AX, DI
-                        CALL    dbgPrint16bit           ; デバッグ
-
-                        MOV     SI, .aTestValue01
-                        CALL    rShellGet               ; 戻り値はDI
-                        MOV     AX, DI
-                        CALL    dbgPrint16bit           ; デバッグ
-
-                        MOV     SI, .aTestValue02
-                        CALL    rShellGet               ; 戻り値はDI
-                        MOV     AX, DI
-                        CALL    dbgPrint16bit           ; デバッグ
-
-                        MOV     SI, .aTestValue03
-                        CALL    rShellGet               ; 戻り値はDI
-                        MOV     AX, DI
-                        CALL    dbgPrint16bit           ; デバッグ
-
-                        MOV     SI, .aTestValue04
-                        CALL    rShellGet               ; 戻り値はDI
-                        MOV     AX, DI
-                        CALL    dbgPrint16bit           ; デバッグ
-
-                        MOV     SI, .aTestValue04
-                        CALL    rShellGet               ; 戻り値はDI
-                        MOV     AX, DI
-                        CALL    dbgPrint16bit           ; デバッグ
-
-                        MOV     SI, mashLoop
-                        CALL    rShellGet               ; 戻り値はDI
-                        MOV     AX, DI
-                        CALL    dbgPrint16bit           ; デバッグ
-
-                        POP     DI
-                        POP     SI
-                        POP     AX
-                ; <----
+                ;CALL    sysList                 ; 一覧表示
         ; <----
         
         JMP     mashLoop                ; ループ処理へ移行
@@ -220,85 +166,49 @@ mashInit:
 ; //////////////////////////////////////////////////////////////////////////// ;
 
 mashLoop:
-        ; シェル変数の定義
-        MOV     AH, "0"
-.dimLoop:
-        ; 設定する
-        PUSH    AX
-
-        MOV     AH, 0x12
-        MOV     AL, 0x20
-        MOV     SI, [.aTokenName]
-
-        CALL    sysDim
-
-        ; ループ制御
-        POP     AX
-        CMP     AH, "0"
-        JZ      .input
-        INC     AH
-        JMP     .dimLoop
-
-.input:
+        ;CALL    sysList                 ; 一覧表示
         ;CALL    libSetCursolNextLine    ; 改行
         ;CALL    rOneLineClear           ; 
 
         ; デバッグ(512バイト)
-        DEBUG_REGISTER_DUMP 0x0100, 0x8000
+        ;DEBUG_REGISTER_DUMP 0x0100, 0x8000
         
-        MOV     AL, "\"        
-        CALL    libPutchar
-        CALL    libSetCursolNextCol
-        MOV     AL, ">"
-        CALL    libPutchar
-        CALL    libSetCursolNextCol
-.inputLoop:
-        ; 入力ループ(1文字事にループ)
+        CALL    rInputCommand           ; コマンドライン入力受け付け
 
-        ; debug ---->
-        ; in  : AX      ダンプするバイト数
-        ;     : DS:DI   ダンプ開始アドレス
-        ;MOV     DI, sOneLineBuf-8
-        ;CALL    dbgDump
-        ; <---- debug
-
-        CALL    rOneLineInput           ; キーボード入力 → バッファ+出力
-        ;PUSH    AX
-        ;POP     AX
-        CMP     AH, 0x00
-        JZ      .inputLoop              ; 続ける
+        MOV     SI, sOneLineBuf
+        CALL    rInputParseToken        ; コマンドライン引数に分離
 
 .parseBuf:
         ; バッファ解析
-        MOV     AX, 0x0000
+        ;MOV     AX, 0x0000
 
         ; puts
-        MOV     BP, .aTestPuts          ; 識別文字列
-        CALL    libPuts
-        MOV     BP, sOneLineBuf         ; 入力バッファ
-        CALL    libPuts
+        ;MOV     BP, .aTestPuts          ; 識別文字列
+        ;CALL    libPuts
+        ;MOV     BP, sOneLineBuf         ; 入力バッファ
+        ;CALL    libPuts
 
         ; sparse
-        MOV     BP, .aTestsParse        ; 識別文字列
-        CALL    libPuts
-        MOV     BP, sOneLineBuf         ; 入力バッファ
-        CALL    libsParse
+        ;MOV     BP, .aTestsParse        ; 識別文字列
+        ;CALL    libPuts
+        ;MOV     BP, sOneLineBuf         ; 入力バッファ
+        ;CALL    libsParse
 
         ; トークン分離
-        MOV     CX, 0x0100              ; メモリ確保
-        CALL    sysMalloc
-        PUSH    BP
+        ;MOV     CX, 0x0100              ; メモリ確保
+        ;CALL    sysMalloc
+        ;PUSH    BP
 
-        MOV     SI, sOneLineBuf
-        MOV     DI, BP
-        MOV     CX, 0x0100
+        ;MOV     SI, sOneLineBuf
+        ;MOV     DI, BP
+        ;MOV     CX, 0x0100
 
-        CALL    libMemcpy
+        ;CALL    libMemcpy
 
-        CALL    libPuts
+        ;CALL    libPuts
 
-        POP     BP
-        CALL    sysFree
+        ;POP     BP
+        ;CALL    sysFree
 
         ; バッファクリア
         CALL    rOneLineClear
@@ -1017,6 +927,10 @@ sysPutChar:
 ; array.asm
 %include        "../asm/lib/array.asm"
 
+; 文字列操作マクロ
+; string.asm
+%include        "../asm/lib/string.asm"
+
 ; 型変換マクロ
 ; cast.asm
 %include        "../asm/lib/cast.asm"
@@ -1219,6 +1133,57 @@ libsPrintf:
 ; ██████╔╝╚██████╔╝██████╔╝     ██║  ██║╚██████╔╝╚██████╔╝   ██║   ██║██║ ╚███║███████╗
 ; ╚═════╝  ╚═════╝ ╚═════╝      ╚═╝  ╚═╝ ╚═════╝  ╚═════╝    ╚═╝   ╚═╝╚═╝  ╚══╝╚══════╝
 ; //////////////////////////////////////////////////////////////////////////// ;
+
+; コマンドライン入力
+; in  : (なし、キーボードから)
+; out : (なし、バッファへ)
+rInputCommand:
+        CALL    rPushReg
+
+        MOV     AL, "\"        
+        CALL    libPutchar
+        CALL    libSetCursolNextCol
+        MOV     AL, ">"
+        CALL    libPutchar
+        CALL    libSetCursolNextCol
+.inputLoop:
+        CALL    rOneLineInput           ; キーボード入力 → バッファ+出力
+        CMP     AH, 0x00
+        JZ      .inputLoop              ; 続ける
+
+        CALL    rPopReg
+        RET
+
+; 入力文字列 → コマンドライン引数
+; in  : SI              バッファ先頭ポインタ(文字列は破壊される)
+; out : __argc          分離したトークンの数
+;       __argvx         トークン(x=0~9)
+rInputParseToken:
+        CALL    rPushReg                ; レジスタ退避
+
+        MOV     AH, " "
+        CALL    libStrtok
+
+        ; デバッグ表示 ---->
+                PUSH    BP
+                MOV     BP, DI
+                CALL    libPuts
+                POP     BP
+        ; <----
+
+        MOV     AH, " "
+        MOV     SI, _NULL
+        CALL    libStrtok
+
+        ; デバッグ表示 ---->
+                PUSH    BP
+                MOV     BP, DI
+                CALL    libPuts
+                POP     BP
+        ; <----
+
+        CALL    rPopReg                 ; レジスタ取得
+        RET
 
 ; カーソル表示更新
 ; in  : (なし)
