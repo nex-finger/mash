@@ -448,8 +448,6 @@ sysSet:
 
         CALL    rShellGet
 
-        ; 入力変数名と一致する変数を発見する(strstr使用？)
-
         ; 発見した変数の型を取得する
 
         ; シェルから入力された文字列を数値に変換する
@@ -1177,8 +1175,9 @@ rInputParseToken:
                 POP     BP
         ; <----
 
-        MOV     SI, DI
-        CALL    libStrlen
+        MACRO_STRLEN DI
+
+        MACRO_SYSDIM 0x12, CL, .aCommandLine
 
         ; デバッグ---->
                 PUSH    AX

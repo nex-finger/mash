@@ -48,6 +48,26 @@
 %define     RET_OK              0x00
 %define     RET_NG_PRM          0x01    ; パラメータエラー
 
+; --- コマンド ---
+; dim コマンド
+; %1 type(変数型(8bit))
+; %2 size(配列の場合要素数)
+; %3 name(変数名)
+; シェル変数を追加する
+%macro MACRO_SYSDIM 3
+        PUSH    AX
+        PUSH    SI
+
+        MOV     AH, %1
+        MOV     AL, %2
+        MOV     SI, %3
+        
+        CALL    sysDim
+
+        POP     SI
+        POP     AX
+%endmacro
+
 ; --- マクロ ---
 ; memcpy
 ; %1 dest(コピー先アドレス)
@@ -107,11 +127,16 @@
         POP     SI
 %endmacro
 
-; strchr(c89)相当
-; in  : SI      探索する文字列
-;       AH      区切り文字
-; out : DI      null: 区切り文字は存在しない
-;               null以外: 最初に発見したアドレス
+; strlen
+; %1 str(検索する先頭アドレス)
+%macro MACRO_STRLEN 1
+        PUSH    SI
+
+        MOV     SI, %1
+        CALL    libStrlen
+
+        POP     SI
+%endmacro
 
 ; シリアル初期化
 %macro MACRO_SERIAL_INIT 0

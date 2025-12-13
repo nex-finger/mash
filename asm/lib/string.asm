@@ -17,7 +17,6 @@ libStrlen:
         MOV WORD BX, [.aRet]
         MOV WORD AX, DI
         SUB     AX, BX
-        DEC     AX                      ; null文字を省くため -1
         MOV WORD [.aRet], AX
 
         CALL    rPopReg
