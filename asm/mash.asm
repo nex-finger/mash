@@ -446,6 +446,8 @@ sysUndim:
 sysSet:
         CALL    rPushReg                ; レジスタ退避
 
+        CALL    rShellGet
+
         ; 入力変数名と一致する変数を発見する(strstr使用？)
 
         ; 発見した変数の型を取得する
@@ -892,6 +894,7 @@ sysPrintf:
 ;                   0: 成功
 ;                   1: 256文字以上の文字列を表示しようとした
 ;                   2: その他の失敗
+
 sysPrint:
         CALL    rPushReg                ; レジスタ退避
 
@@ -904,6 +907,7 @@ sysPrint:
 ; カーソル位置の更新も行う
 ; in  : AL      表示する文字
 sysPutChar:
+
 
 ; //////////////////////////////////////////////////////////////////////////// ;
 ; --- ライブラリ ---
@@ -1161,13 +1165,10 @@ rInputCommand:
 rInputParseToken:
         CALL    rPushReg                ; レジスタ退避
 
+        MOV BYTE [.aCommandLineID], "0" ; 変数名 "__in0   " からスタート
 .token_loop:                            ; バッファが枯れるまでループ
         MOV     AH, " "
         CALL    libStrtok
-                PUSH    AX
-                MOV WORD AX, DI
-                CALL    dbgPrint16bit           ; デバッグ
-                POP     AX
 
         ; デバッグ表示 ---->
                 PUSH    BP
@@ -1176,14 +1177,33 @@ rInputParseToken:
                 POP     BP
         ; <----
 
+        MOV     SI, DI
+        CALL    libStrlen
+
+        ; デバッグ---->
+                PUSH    AX
+                MOV WORD AX, CX
+                CALL    dbgPrint16bit           ; デバッグ
+                POP     AX
+        ; <----
+
+        ;MOV     SI, .aCommandLine
+        ;CALL    sysSet                  ; 変数セット
+
         CMP     AL, 0x00
         JZ      .exit
         MOV     SI, _NULL
+        ADD BYTE [.aCommandLineID], 1
         JMP     .token_loop
 
 .exit:
+        CALL    sysList
         CALL    rPopReg                 ; レジスタ取得
         RET
+.aCommandLine:                          ; 変数名8バイト
+        DB      "__in"
+.aCommandLineID:                        ; "__in0   " ～ "__in9   " までの10個
+        DB      "0   "
 
 ; カーソル表示更新
 ; in  : (なし)

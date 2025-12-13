@@ -2,38 +2,26 @@
 ; string.h                                                                     ;
 ; //////////////////////////////////////////////////////////////////////////// ;
 
-; 文字の探索
-; strchr(c89)相当
-; in  : SI      探索する文字列
-;       AH      区切り文字
-; out : DI      null: 区切り文字は存在しない
-;               null以外: 最初に発見したアドレス
-libStrchr:
+; 文字列の長さを取得する(null文字を含まない)
+; strlen(c89)相当
+; in  : SI      取得する文字列
+; out : CX      文字列の長さ(\0の直前までカウント)
+libStrlen:
         CALL    rPushReg
 
-        CMP     AH, 0x00                ; null文字の区切り文字は受け付けない
-        JZ      .breakAbnormal
-
-.chkLoop:
-        MOV BYTE AL, [SI]
-        CMP     AL, AH                  ; 検索したい文字がある場合は発見アドレスを
-        JZ      .breakNormal
-        CMP     AL, 0x00                ; 文字列の最後まで探してもないならnullを
-        JZ      .breakAbnormal
-        INC     SI
-        JMP     .chkLoop
-
-.breakNormal:
         MOV WORD [.aRet], SI
-        JMP     .exit
 
-.breakAbnormal:
-        MOV WORD [.aRet], _NULL
-        JMP     .exit
+        MOV     AH, 0x00                ; null文字が
+        CALL    libStrchr               ; 見つかったアドレスを返却する
 
-.exit:
+        MOV WORD BX, [.aRet]
+        MOV WORD AX, DI
+        SUB     AX, BX
+        DEC     AX                      ; null文字を省くため -1
+        MOV WORD [.aRet], AX
+
         CALL    rPopReg
-        MOV WORD DI, [.aRet]
+        MOV WORD CX, [.aRet]
         RET
 .aRet:
         DW      0x0000
@@ -104,4 +92,37 @@ libStrtok:
 .aRetAL:                                ; 戻り値
         DB      0x00
 .aHoldAddr:                             ; 前回の保持アドレス
+        DW      0x0000
+
+; 文字の探索(バグつき)
+; strchr(c89)相当
+; in  : SI      探索する文字列
+;       AH      区切り文字
+; out : DI      null: 区切り文字は存在しない
+;               null以外: 最初に発見したアドレス
+libStrchr:
+        CALL    rPushReg
+
+.chkLoop:
+        MOV BYTE AL, [SI]
+        CMP     AL, AH                  ; 検索したい文字がある場合は発見アドレスを
+        JZ      .breakNormal
+        CMP     AL, 0x00                ; 文字列の最後まで探してもないならnullを
+        JZ      .breakAbnormal
+        INC     SI
+        JMP     .chkLoop
+
+.breakNormal:
+        MOV WORD [.aRet], SI
+        JMP     .exit
+
+.breakAbnormal:
+        MOV WORD [.aRet], _NULL
+        JMP     .exit
+
+.exit:
+        CALL    rPopReg
+        MOV WORD DI, [.aRet]
+        RET
+.aRet:
         DW      0x0000
