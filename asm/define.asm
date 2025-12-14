@@ -68,6 +68,26 @@
         POP     AX
 %endmacro
 
+; set コマンド
+; %1 name
+; %2 len(8bit)
+; %3 val
+%macro MACRO_SYSSET 3
+        PUSH    SI
+        PUSH    AX
+        PUSH    BX
+
+        MOV     SI, %1
+        MOV     AL, %2
+        MOV     BX, %3
+
+        CALL    sysSet
+
+        POP     BX
+        POP     AX
+        POP     SI
+%endmacro
+
 ; --- マクロ ---
 ; memcpy
 ; %1 dest(コピー先アドレス)

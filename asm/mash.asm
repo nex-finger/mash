@@ -411,7 +411,7 @@ sysDim:
 
 .exit:
         CALL    rPopReg                 ; レジスタ取得
-        MOV BYTE CH, [.aRet]
+        ;MOV BYTE CH, [.aRet]
         RET
 .func_call:                             ; コールバックアドレス
         DW      0x0000
@@ -442,20 +442,86 @@ sysUndim:
 ; シェル変数の値を更新する
 ; in  : SI      変数文字列先頭アドレス
 ;       AL      要素数(配列型の場合のみ有効)
+;       BX      uint, sint の場合: 設定即値
+;               char の場合: 即値設定(BHのみ考慮)
+;               str の場合: 設定する先頭ポインタ
 ; out : CH      エラーコード
 sysSet:
         CALL    rPushReg                ; レジスタ退避
+        MOV WORD [.aValue], BX
 
+        ; 変数構造体を取得
         CALL    rShellGet
-
-        ; 発見した変数の型を取得する
+        MOV WORD [.aAddress], DI        ; 発見した変数のポインタを格納する
+        INC     DI
+        MOV     AH, [DI]
+        MOV     [.aType], AH            ; 発見した変数の型を格納する
 
         ; シェルから入力された文字列を数値に変換する
+        MOV BYTE AH, [.aType]
+        CMP     AH, 0x00
+        JZ      .setUint
+        CMP     AH, 0x01
+        JZ      .setSint
+        CMP     AH, 0x02
+        JZ      .setChar
+        CMP     AH, 0x10
+        JZ      .setArr
+        CMP     AH, 0x12
+        JZ      .setStr
+        JMP     .setError
 
         ; 数値をセットする
+.setUint:                               ; 16bit整数
+.setSint:
+        JMP     .exit
 
+.setChar:                               ; 8bit整数
+        JMP     .exit
+
+.setArr:                                ; 16bi配列
+        JMP     .exit
+
+.setStr:                                ; 8bit配列(部分操作不可)
+        MOV WORD BP, [.aAddress]
+        ADD     BP, 10                  ; 配列のサイズは構造体11バイト目から     
+        MOV     AH, 0x00
+        MOV     AL, [BP]
+        INC     BP                      ; 配列の先頭ポインタは12バイト目から
+        MOV WORD BX, [.aValue]
+
+        ; デバッグ---->
+                PUSH    AX
+                MOV WORD AX, BP
+                CALL    dbgPrint16bit           ; デバッグ
+                POP     AX
+
+                PUSH    AX
+                MOV WORD AX, BX
+                CALL    dbgPrint16bit           ; デバッグ
+                POP     AX
+
+                PUSH    AX
+                MOV WORD AX, AX
+                CALL    dbgPrint16bit           ; デバッグ
+                POP     AX
+        ; <----
+
+        MACRO_MEMCPY BP, BX, AX
+        JMP     .exit
+
+.setError:
+        JMP     .exit
+
+.exit:
         CALL    rPopReg                 ; レジスタ取得
         RET
+.aAddress:
+        DW      0x0000
+.aValue:
+        DW      0x0000
+.aType:
+        DW      0x00
 
 ; list コマンド
 ; シェル変数のチェーンを列挙する
@@ -1175,19 +1241,20 @@ rInputParseToken:
                 POP     BP
         ; <----
 
-        MACRO_STRLEN DI
-
-        MACRO_SYSDIM 0x12, CL, .aCommandLine
-
         ; デバッグ---->
-                PUSH    AX
-                MOV WORD AX, CX
-                CALL    dbgPrint16bit           ; デバッグ
-                POP     AX
+                ;PUSH    AX
+                ;MOV WORD AX, BP
+                ;CALL    dbgPrint16bit           ; デバッグ
+                ;POP     AX
         ; <----
 
-        ;MOV     SI, .aCommandLine
-        ;CALL    sysSet                  ; 変数セット
+
+        MACRO_STRLEN DI
+
+        INC     CL                      ; 終端文字分を追加
+        MACRO_SYSDIM 0x12, CL, .aCommandLine
+
+        MACRO_SYSSET .aCommandLine, CL, [.aCommandValue]
 
         CMP     AL, 0x00
         JZ      .exit
@@ -1200,9 +1267,11 @@ rInputParseToken:
         CALL    rPopReg                 ; レジスタ取得
         RET
 .aCommandLine:                          ; 変数名8バイト
-        DB      "__in"
-.aCommandLineID:                        ; "__in0   " ～ "__in9   " までの10個
-        DB      "0   "
+        DB      "__argv"
+.aCommandLineID:                        ; "__argv0 " ～ "__argv9 " までの10個
+        DB      "0 ", 0x00
+.aCommandValue:                         ; 格納する値
+        DB      0x0000
 
 ; カーソル表示更新
 ; in  : (なし)
