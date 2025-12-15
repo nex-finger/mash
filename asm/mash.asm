@@ -115,27 +115,27 @@ mashInit:
         CALL    sysDim
 
         ; デバッグ ---->
-                MOV     AH, 0x00                ; テスト変数
-                MOV     SI, .aTestValue01
-                CALL    sysDim                  ; 定義
+                ;MOV     AH, 0x00                ; テスト変数
+                ;MOV     SI, .aTestValue01
+                ;CALL    sysDim                  ; 定義
 
-                MOV     AH, 0x10                ; テスト変数
-                MOV     AL, 3                   ; 要素数は3
-                MOV     SI, .aTestValue02
-                CALL    sysDim                  ; 定義
+                ;MOV     AH, 0x10                ; テスト変数
+                ;MOV     AL, 3                   ; 要素数は3
+                ;MOV     SI, .aTestValue02
+                ;CALL    sysDim                  ; 定義
 
-                MOV     AH, 0x01                ; テスト変数
-                MOV     SI, .aTestValue03
-                CALL    sysDim                  ; 定義
+                ;MOV     AH, 0x01                ; テスト変数
+                ;MOV     SI, .aTestValue03
+                ;CALL    sysDim                  ; 定義
 
-                MOV     AH, 0x02                ; テスト変数
-                MOV     SI, .aTestValue04
-                CALL    sysDim                  ; 定義
+                ;MOV     AH, 0x02                ; テスト変数
+                ;MOV     SI, .aTestValue04
+                ;CALL    sysDim                  ; 定義
 
-                MOV     AH, 0x12                ; テスト変数
-                MOV     AL, 3                   ; 要素数は3
-                MOV     SI, .aTestValue05
-                CALL    sysDim   
+                ;MOV     AH, 0x12                ; テスト変数
+                ;MOV     AL, 0x15                ; 要素数は3
+                ;MOV     SI, .aTestValue05
+                ;CALL    sysDim    
 
                 ;CALL    sysList                 ; 一覧表示
         ; <----
@@ -397,7 +397,7 @@ sysDim:
 
 .fill_common2:
         MOV WORD BP, [.aAddr]           ; 先頭アドレス
-        MOV     BH, 0x00
+        MOV     BX, 0x00
         MOV BYTE AH, [.aSize]
         ADD     BL, AH
         ADD     BP, BX
@@ -447,6 +447,13 @@ sysUndim:
 ;               str の場合: 設定する先頭ポインタ
 ; out : CH      エラーコード
 sysSet:
+        ; デバッグ---->
+                ;PUSH    AX
+                ;MOV WORD AX, BX
+                ;CALL    dbgPrint16bit           ; デバッグ
+                ;POP     AX
+        ; <----
+
         CALL    rPushReg                ; レジスタ退避
         MOV WORD [.aValue], BX
 
@@ -488,24 +495,8 @@ sysSet:
         MOV     AH, 0x00
         MOV     AL, [BP]
         INC     BP                      ; 配列の先頭ポインタは12バイト目から
+
         MOV WORD BX, [.aValue]
-
-        ; デバッグ---->
-                PUSH    AX
-                MOV WORD AX, BP
-                CALL    dbgPrint16bit           ; デバッグ
-                POP     AX
-
-                PUSH    AX
-                MOV WORD AX, BX
-                CALL    dbgPrint16bit           ; デバッグ
-                POP     AX
-
-                PUSH    AX
-                MOV WORD AX, AX
-                CALL    dbgPrint16bit           ; デバッグ
-                POP     AX
-        ; <----
 
         MACRO_MEMCPY BP, BX, AX
         JMP     .exit
@@ -689,7 +680,7 @@ sysList:
         JMP     .aPrintNext
 .aPrintString:                          ; 文字列 文字表示
         MOV WORD BP, [.aStruct_p]
-        ADD     BP, 10
+        ADD     BP, 11
         MOV BYTE AH, [BP]
 
         MOV     AL, 0x22                ; 最初の "
@@ -698,8 +689,6 @@ sysList:
 .aPrintStringLoop:
         ; この時点で BPには文字列の先頭ポインタ、 AHには残り表示文字数
         MOV BYTE AL, [BP]               ; 1文字表示
-        CALL    libPutchar
-        CALL    libSetCursolNextCol
 
         DEC     AH                      ; 次の1文字にフォーカス
         INC     BP
@@ -709,6 +698,10 @@ sysList:
         JZ      .aPrintStringNext       ; 回数をこなしたら終了
         CMP     AL, 0x00
         JZ      .aPrintStringNext       ; null文字が来たら終了
+
+        CALL    libPutchar
+        CALL    libSetCursolNextCol
+        
         JMP     .aPrintStringLoop       ; 要素数だけ繰り返す
 
 .aPrintStringNext:
@@ -1064,7 +1057,7 @@ libPutsNoCRLF:
         ; <---- 1文字取得
 
 .put:
-        CALL    libPutchar
+        CALL    libPutchar       
         CALL    libSetCursolNextCol
 
         INC     BP
@@ -1233,29 +1226,56 @@ rInputParseToken:
 .token_loop:                            ; バッファが枯れるまでループ
         MOV     AH, " "
         CALL    libStrtok
-
-        ; デバッグ表示 ---->
-                PUSH    BP
-                MOV     BP, DI
-                CALL    libPuts
-                POP     BP
-        ; <----
+        MOV BYTE [.aTokRet], AL
+        MOV WORD [.aCommandValue], DI
 
         ; デバッグ---->
                 ;PUSH    AX
-                ;MOV WORD AX, BP
+                ;MOV WORD AX, [.aCommandValue]
+                ;CALL    dbgPrint16bit           ; デバッグ
+                ;POP     AX
+                ;DEBUG_REGISTER_DUMP 0x0010, [.aCommandValue]
+        ; <----
+
+        ; デバッグ表示 ---->
+                ;PUSH    BP
+                ;MOV WORD BP, [.aCommandValue]
+                ;CALL    libPuts
+                ;POP     BP
+        ;.debugHlt:
+                ;JMP     .debugHlt
+        ; <----
+
+        MACRO_STRLEN DI
+        INC     CL                      ; 終端文字分を追加
+        MOV BYTE [.aLen], CL
+
+        MACRO_SYSDIM 0x12, CL, .aCommandLine
+
+        MOV WORD SI, .aCommandLine
+        MOV     AL, CL
+        MOV WORD BX, [.aCommandValue]
+        ; デバッグ---->
+                ;PUSH    AX
+                ;MOV WORD AX, SI
+                ;CALL    dbgPrint16bit           ; デバッグ
+                ;POP     AX
+
+                ;PUSH    AX
+                ;MOV WORD AX, AX
+                ;CALL    dbgPrint16bit           ; デバッグ
+                ;POP     AX
+
+                ;PUSH    AX
+                ;MOV WORD AX, BX
                 ;CALL    dbgPrint16bit           ; デバッグ
                 ;POP     AX
         ; <----
+        CALL     sysSet
+        DEBUG_REGISTER_DUMP 0x00100, 0x8000
+        ;MACRO_SYSSET .aCommandLine, CL, [.aCommandValue]
 
-
-        MACRO_STRLEN DI
-
-        INC     CL                      ; 終端文字分を追加
-        MACRO_SYSDIM 0x12, CL, .aCommandLine
-
-        MACRO_SYSSET .aCommandLine, CL, [.aCommandValue]
-
+        MOV BYTE AL, [.aTokRet]
         CMP     AL, 0x00
         JZ      .exit
         MOV     SI, _NULL
@@ -1271,7 +1291,11 @@ rInputParseToken:
 .aCommandLineID:                        ; "__argv0 " ～ "__argv9 " までの10個
         DB      "0 ", 0x00
 .aCommandValue:                         ; 格納する値
-        DB      0x0000
+        DW      0x0000
+.aTokRet:                               ; strtok の戻り値
+        DB      0x00
+.aLen:                                  ; strlen の戻り値
+        DB      0x00
 
 ; カーソル表示更新
 ; in  : (なし)
