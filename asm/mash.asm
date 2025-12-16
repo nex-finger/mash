@@ -177,6 +177,7 @@ mashLoop:
 
         MOV     SI, sOneLineBuf
         CALL    rInputParseToken        ; コマンドライン引数に分離
+        CALL    rCheckAndRunCommand     ; コマンドの実行
 
 .parseBuf:
         ; バッファ解析
@@ -481,17 +482,35 @@ sysSet:
         ; 数値をセットする
 .setUint:                               ; 16bit整数
 .setSint:
+        MOV WORD BP, [.aAddress]
+        ADD     BP, 10
+        MOV WORD BX, [.aValue]
+        MOV WORD [BP], BX               ; 2バイト
         JMP     .exit
 
 .setChar:                               ; 8bit整数
+        MOV WORD BP, [.aAddress]
+        ADD     BP, 10
+        MOV WORD BX, [.aValue]
+        MOV BYTE [BP], BH               ; 1バイト
         JMP     .exit
 
 .setArr:                                ; 16bi配列
+        MOV WORD BP, [.aAddress]
+        ADD     BP, 10                  ; 配列のサイズは構造体11バイト目から
+        MOV     AL, [BP]
+        SHL     AL, 1
+        MOV     AH, 0x00
+        INC     BP                      ; 配列の先頭ポインタは12バイト目から
+
+        MOV WORD BX, [.aValue]
+
+        MACRO_MEMCPY BP, BX, AX
         JMP     .exit
 
 .setStr:                                ; 8bit配列(部分操作不可)
         MOV WORD BP, [.aAddress]
-        ADD     BP, 10                  ; 配列のサイズは構造体11バイト目から     
+        ADD     BP, 10                  ; 配列のサイズは構造体11バイト目から
         MOV     AH, 0x00
         MOV     AL, [BP]
         INC     BP                      ; 配列の先頭ポインタは12バイト目から
@@ -536,6 +555,7 @@ sysList:
         ; アドレス、変数名、値の表示する
         MOV WORD AX, [.aStruct_p]       ; アドレスを表示
         MOV     SI, .aTmp_long
+        MOV     BH, 0x01
         CALL    libitox
         MOV     BP, .aTmp_long
         CALL    libPutsNoCRLF
@@ -701,7 +721,7 @@ sysList:
 
         CALL    libPutchar
         CALL    libSetCursolNextCol
-        
+
         JMP     .aPrintStringLoop       ; 要素数だけ繰り返す
 
 .aPrintStringNext:
@@ -1272,7 +1292,7 @@ rInputParseToken:
                 ;POP     AX
         ; <----
         CALL     sysSet
-        DEBUG_REGISTER_DUMP 0x00100, 0x8000
+        ;DEBUG_REGISTER_DUMP 0x00100, 0x8000
         ;MACRO_SYSSET .aCommandLine, CL, [.aCommandValue]
 
         MOV BYTE AL, [.aTokRet]
@@ -1283,19 +1303,165 @@ rInputParseToken:
         JMP     .token_loop
 
 .exit:
-        CALL    sysList
+        MACRO_SYSDIM 0x00, 0x00, .aCommandLineCnt
+        MOV     BH, 0x00
+        MOV BYTE BL, [.aCommandLineID]
+        SUB     BL, 0x30
+        INC     BL
+        MOV     SI, .aCommandLineCnt
+        CALL    sysSet
+
+        ;CALL    sysList
         CALL    rPopReg                 ; レジスタ取得
         RET
 .aCommandLine:                          ; 変数名8バイト
         DB      "__argv"
 .aCommandLineID:                        ; "__argv0 " ～ "__argv9 " までの10個
         DB      "0 ", 0x00
+.aCommandLineCnt:                       ; argvの数を格納する変数名
+        DB      "__argc  "
 .aCommandValue:                         ; 格納する値
         DW      0x0000
 .aTokRet:                               ; strtok の戻り値
         DB      0x00
 .aLen:                                  ; strlen の戻り値
         DB      0x00
+
+; コマンドの実行
+; 
+rCheckAndRunCommand:
+        CALL    rPushReg
+
+        MOV     SI, .aInputToken
+        CALL    rShellGet
+        ADD     DI, 11
+        MOV WORD [.aInputStr], DI
+
+        ; デバッグ---->
+                PUSH    AX
+                MOV WORD AX, .BIAddrTable
+                CALL    dbgPrint16bit           ; デバッグ
+                POP     AX
+
+                DEBUG_REGISTER_DUMP 0x0030, .BIAddrTable
+        ; <----
+
+        MOV WORD SI, .aNameBICommand
+        MOV WORD [.aBIAddr], .BIAddrTable
+.BIchkLoop:
+        MOV     AH, " "
+        CALL    libStrtok               ; DIにトークン
+        PUSH    AX
+
+        MOV     SI, [.aInputStr]
+        CALL    libStrcmp               ; SIとDIの比較結果をAXに格納
+
+        ; デバッグ---->
+                PUSH    AX
+                MOV WORD AX, AX
+                CALL    dbgPrint16bit           ; デバッグ
+                POP     AX
+        ; <----
+        POP     CX
+
+        CMP     AX, 0x0000              ; 文字列一致(コマンド発見)でループ脱却
+        JZ      .BIchkFound
+
+        MOV WORD BX, [.aBIAddr]         ; 次の関数ポインタへ
+        ADD     BX, 2
+        MOV WORD [.aBIAddr], BX
+        
+        CMP     CL, 0x00                ; ビルトインコマンドの全てにマッチしなければおわり
+        JZ      .BIchkNotFound
+        MOV     SI, 0x0000
+        JMP     .BIchkLoop
+
+.BIchkFound:
+        MOV WORD SI, [.aBIAddr]
+        MOV WORD SI, [SI]
+        CMP     SI, 0x0000
+        JZ      .BIchkNotDefine
+
+        ; デバッグ---->
+                PUSH    AX
+                MOV WORD AX, SI
+                CALL    dbgPrint16bit           ; デバッグ
+                POP     AX
+
+                PUSH    AX
+                MOV WORD AX, sysList
+                CALL    dbgPrint16bit           ; デバッグ
+                POP     AX
+        ; <----
+
+        CALL    SI                              ; コマンド実行！！
+        JMP     .exit
+
+.BIchkNotFound:
+        MOV     BP, .aStrNotFound
+        CALL    libPuts
+        JMP     .exit
+
+.BIchkNotDefine:
+        MOV     BP, .aStrNotDefine
+        CALL    libPuts
+        JMP     .exit
+
+.exit:
+        CALL    rPopReg
+        RET
+.aNumBICommand:                         ; ビルトインコマンドの数
+        DB      16
+.aNameBICommand:                        ; ビルトインコマンドの列挙
+        DB      "dim "
+        DB      "undim "
+        DB      "set "
+        DB      "echo "
+        DB      "list "
+        DB      "pwd "
+        DB      "dir "
+        DB      "cd "
+        DB      "mkdir "
+        DB      "rmdir "
+        DB      "mkfile "
+        DB      "rmfile "
+        DB      "rn "
+        DB      "cat "
+        DB      "cls "
+        DB      "lift", 0x00
+.aBIAddr:                               ; 選択した関数ポインタ
+        DW      _NULL
+.BIAddrTable:                           ; ビルトインコマンドのルーチンポインタ
+        DW      sysDim          ;dim
+        DW      _NULL           ;undim
+        DW      sysSet          ;set
+        DW      _NULL           ;echo
+        DW      sysList         ;list
+        DW      _NULL           ;pwd
+        DW      _NULL           ;dir
+        DW      _NULL           ;cd
+        DW      _NULL           ;mkdir
+        DW      _NULL           ;rmdir
+        DW      _NULL           ;mkfile
+        DW      _NULL           ;rmfile
+        DW      _NULL           ;rn
+        DW      _NULL           ;cat
+        DW      .testCommand    ;cls
+        DW      _NULL           ;lift
+.aInputToken:
+        DB      "__argv0  ", 0x00
+.aInputStr:
+        DW      0x0000
+.aStrNotFound:
+        DB      "Illegal operation", 0x00
+.aStrNotDefine:
+        DB      "Undefined operation", 0x00
+.testCommand:                   ; テスト用コマンド
+        PUSH    BP
+        MOV     BP, .aNameBICommand
+        CALL    libPuts
+        POP     BP
+        RET
 
 ; カーソル表示更新
 ; in  : (なし)
@@ -1487,6 +1653,7 @@ cmdVer:
 ; in  : SI      検索する変数名
 ; out : DI      null以外: 発見した変数ポインタ
 ;               null: 見つからなかった
+;       AX      発見した変数の値もしくはポインタ
 rShellGet:
         CALL    rPushReg                ; レジスタ退避
 
@@ -1531,19 +1698,35 @@ rShellGet:
 
 .discoverValue:                         ; 発見できた
         SUB     BP, 2                   ; BPを次の変数ポインタから先頭に戻す
-        MOV WORD [.aRet], BP
+        MOV WORD [.aRetAddr], BP
+        ADD     BP, 1                   ; 変数型により値のポインタを設定
+        MOV BYTE AH, [BP]
+        AND     AH, 0x10
+        CMP     AH, 0x00
+        JNZ     .noArr
+.arr:
+        ADD     BP, 10
+        MOV WORD [.aRetVal], BP         ; ポインタ
+        JMP     .exit
+.noArr:
+        ADD     BP, 9
+        MOV WORD AX, [BP]
+        MOV WORD [.aRetVal], AX         ; 即値
         JMP     .exit
 .noDiscoverValue:                       ; 発見できなかった
-        MOV WORD [.aRet], 0x0000
+        MOV WORD [.aRetAddr], 0x0000
+        MOV WORD [.aRetVal], 0x0000
         JMP     .exit
 
 .exit:
         CALL    rPopReg                 ; レジスタ取得
-        MOV WORD DI, [.aRet]
+        MOV WORD DI, [.aRetAddr]
         RET
 .inName:                                ; 変数名(空白埋め8文字+番兵のnull)
         DB      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
-.aRet:                                  ; 戻り値
+.aRetAddr:                              ; 戻り値ポインタ
+        DW      0x0000
+.aRetVal:                               ; 戻り値変数
         DW      0x0000
         
 ; 全レジスタの退避

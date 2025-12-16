@@ -25,6 +25,80 @@ libStrlen:
 .aRet:
         DW      0x0000
 
+; 文字列の比較
+; 両者が 0x00 になるまで比較する、不一致を確認し次第中断する
+; strcmp(c89)相当
+; in  : SI      比較文字列１
+;       DI      比較文字列２
+; out : AX      0x0000: 一致
+;               0x0001: 文字列１ > 文字列２
+;               0xffff: 文字列２ > 文字列１
+libStrcmp:
+        CALL    rPushReg
+
+.chkLoop:
+        MOV BYTE AH, [SI]
+        MOV BYTE BH, [DI]
+        CMP     AH, BH
+        JA      .bigger1                ; s1 > s2
+        CMP     BH, AH
+        JA      .bigger2                ; s2 > s1
+        CMP     AH, 0x00
+        JZ      .equal                  ; s1 == s2 かつ終端文字
+        INC     SI
+        INC     DI
+        JMP     .chkLoop
+
+.equal:
+        MOV WORD [.aRet], 0x0000
+        JMP     .exit
+.bigger1:
+        MOV WORD [.aRet], 0x0001
+        JMP     .exit
+.bigger2:
+        MOV WORD [.aRet], 0xffff
+        JMP     .exit
+
+.exit:
+        CALL    rPopReg
+        MOV WORD AX, [.aRet]
+        RET
+.aRet:
+        DW      0x0000
+
+; 文字の探索(バグつき)
+; strchr(c89)相当
+; in  : SI      探索する文字列
+;       AH      区切り文字
+; out : DI      null: 区切り文字は存在しない
+;               null以外: 最初に発見したアドレス
+libStrchr:
+        CALL    rPushReg
+
+.chkLoop:
+        MOV BYTE AL, [SI]
+        CMP     AL, AH                  ; 検索したい文字がある場合は発見アドレスを
+        JZ      .breakNormal
+        CMP     AL, 0x00                ; 文字列の最後まで探してもないならnullを
+        JZ      .breakAbnormal
+        INC     SI
+        JMP     .chkLoop
+
+.breakNormal:
+        MOV WORD [.aRet], SI
+        JMP     .exit
+
+.breakAbnormal:
+        MOV WORD [.aRet], _NULL
+        JMP     .exit
+
+.exit:
+        CALL    rPopReg
+        MOV WORD DI, [.aRet]
+        RET
+.aRet:
+        DW      0x0000
+
 ; 文字列の分割
 ; strtok(c89)相当
 ; in  : SI      null: 続行
@@ -91,37 +165,4 @@ libStrtok:
 .aRetAL:                                ; 戻り値
         DB      0x00
 .aHoldAddr:                             ; 前回の保持アドレス
-        DW      0x0000
-
-; 文字の探索(バグつき)
-; strchr(c89)相当
-; in  : SI      探索する文字列
-;       AH      区切り文字
-; out : DI      null: 区切り文字は存在しない
-;               null以外: 最初に発見したアドレス
-libStrchr:
-        CALL    rPushReg
-
-.chkLoop:
-        MOV BYTE AL, [SI]
-        CMP     AL, AH                  ; 検索したい文字がある場合は発見アドレスを
-        JZ      .breakNormal
-        CMP     AL, 0x00                ; 文字列の最後まで探してもないならnullを
-        JZ      .breakAbnormal
-        INC     SI
-        JMP     .chkLoop
-
-.breakNormal:
-        MOV WORD [.aRet], SI
-        JMP     .exit
-
-.breakAbnormal:
-        MOV WORD [.aRet], _NULL
-        JMP     .exit
-
-.exit:
-        CALL    rPopReg
-        MOV WORD DI, [.aRet]
-        RET
-.aRet:
         DW      0x0000
