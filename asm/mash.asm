@@ -177,9 +177,10 @@ mashLoop:
 
         MOV     SI, sOneLineBuf
         CALL    rInputParseToken        ; コマンドライン引数に分離
-        CALL    rCheckAndRunCommand     ; コマンドの実行
+        ;CALL    rCheckAndRunCommand     ; コマンドの実行
+        CALL    sysList
+        CALL    rReleaseToken           ; コマンドライン引数の解放
 
-.parseBuf:
         ; バッファ解析
         ;MOV     AX, 0x0000
 
@@ -433,11 +434,24 @@ sysDim:
 
 ; undim コマンド
 ; シェル変数を解放する
+; [hed1 val1 btm1] -> [hed2 val2 btm2] -> [hed3 val3 btm3]
+; ↓
+; [hed1 val1 btm2] -> (hed2 val2 btm2) -> [hed3 val3 btm3]
+; in  : SI      解放する変数文字列先頭アドレス
+; out : なし
 sysUndim:
         CALL    rPushReg                ; レジスタ退避
 
+        ; 変数を間引いて解放
+
         CALL    rPopReg                 ; レジスタ取得
         RET
+.aBottom1:
+        DW      0x0000
+.aHead2:
+        DW      0x0000
+.aBottom2:
+        DW      0x0000
 
 ; set コマンド
 ; シェル変数の値を更新する
@@ -1462,6 +1476,47 @@ rCheckAndRunCommand:
         CALL    libPuts
         POP     BP
         RET
+
+; コマンドライン引数の解放
+; __argc 個分の __argv を undim する
+rReleaseToken:
+        CALL    rPushReg
+
+        MOV     SI, .aTokenCnt
+        CALL    rShellGet               ; DIに __argc のポインタが格納される
+        ADD     DI, 10
+        MOV WORD AX, [DI]
+        MOV WORD [.aCnt], AX            ; 変数値を格納
+
+        MOV     CX, 0x0000
+        MOV BYTE [.aTokenNum], "0"
+.releaseLoop:
+        MOV WORD DX, [.aCnt]
+        CMP     CX, DX
+        JZ      .releaseBreak
+
+        ; 解放
+        MOV     SI, .aTokenStr
+        CALL    sysUndim
+
+        MOV BYTE AH, [.aTokenNum]
+        INC     AH
+        MOV BYTE [.aTokenNum], AH
+        INC     CX
+        JMP     .releaseLoop  
+
+.releaseBreak:
+
+        CALL    rPopReg
+        RET
+.aCnt:
+        DW      0x0000
+.aTokenCnt:                             ; コマンドライン引数の個数を記録している変数名
+        DB      "__argc  ", 0x00
+.aTokenStr:                             ; 変数名8バイト
+        DB      "__argv"
+.aTokenNum:                             ; "__argv0 " ～ "__argv9 " までの10個
+        DB      "0 ", 0x00
 
 ; カーソル表示更新
 ; in  : (なし)
