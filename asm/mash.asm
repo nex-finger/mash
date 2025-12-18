@@ -177,8 +177,7 @@ mashLoop:
 
         MOV     SI, sOneLineBuf
         CALL    rInputParseToken        ; コマンドライン引数に分離
-        ;CALL    rCheckAndRunCommand     ; コマンドの実行
-        CALL    sysList
+        CALL    rCheckAndRunCommand     ; コマンドの実行
         CALL    rReleaseToken           ; コマンドライン引数の解放
 
         ; バッファ解析
@@ -1390,9 +1389,17 @@ rInputParseToken:
         DB      0x00
 
 ; コマンドの実行
-; 
+; in  : なし
+; out : なし
 rCheckAndRunCommand:
         CALL    rPushReg
+
+        ; ビルトインコマンド検索用の文字列をコピーする
+        MACRO_STRLEN .aNameBICommand    ; CXに文字数
+        INC     CX
+        CALL    sysMalloc               ; strtokで切り刻む用のメモリを確保、戻り値BP
+        MOV WORD [.aAllocMem], BP
+        MACRO_MEMCPY BP, .aNameBICommand, CX    ; コピー
 
         MOV     SI, .aInputToken
         CALL    rShellGet
@@ -1408,7 +1415,7 @@ rCheckAndRunCommand:
                 DEBUG_REGISTER_DUMP 0x0030, .BIAddrTable
         ; <----
 
-        MOV WORD SI, .aNameBICommand
+        MOV WORD SI, [.aAllocMem]
         MOV WORD [.aBIAddr], .BIAddrTable
 .BIchkLoop:
         MOV     AH, " "
@@ -1470,11 +1477,14 @@ rCheckAndRunCommand:
         JMP     .exit
 
 .exit:
+        MOV WORD BP, [.aAllocMem]
+        CALL    sysFree
+
         CALL    rPopReg
         RET
 .aNumBICommand:                         ; ビルトインコマンドの数
         DB      16
-.aNameBICommand:                        ; ビルトインコマンドの列挙
+.aNameBICommand:                        ; ビルトインコマンドの列挙(strtokでぶつ切りにしないこと！)
         DB      "dim "
         DB      "undim "
         DB      "set "
@@ -1518,6 +1528,8 @@ rCheckAndRunCommand:
         DB      "Illegal operation", 0x00
 .aStrNotDefine:
         DB      "Undefined operation", 0x00
+.aAllocMem:
+        DW      0x0000
 .testCommand:                   ; テスト用コマンド
         PUSH    BP
         MOV     BP, .aNameBICommand
