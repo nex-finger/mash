@@ -45,7 +45,7 @@ cVersionLen:                            ; 版数文字列の長さ
         DW      18
 
 cVersionStr:                            ; 版数文字列の内容
-        DB      "mash system v0.3.5"
+        DB      "mash system v0.3.6"
 
 ; //////////////////////////////////////////////////////////////////////////// ;
 ; --- 変数 ---
@@ -442,15 +442,63 @@ sysDim:
 sysUndim:
         CALL    rPushReg                ; レジスタ退避
 
-        ; 変数を間引いて解放
+        MOV WORD [.aBottom1], sTopValAddr       ; 最初のポインタ(0x4100)
 
+        ; 変数を間引いて解放
+.searchLoop:
+        ; 次のポインタを格納
+        MOV WORD BP, [.aBottom1]        ; (BP:0x4100)
+        MOV WORD BP, [BP]               ; (BP:[0x4100]=0x8030)
+        MOV WORD [.aHead2], BP
+        MOV     BH, 0x00
+        MOV BYTE BL, [BP]               ; (BP:[0x8030]=変数のサイズ)
+        ADD     BP, BX
+        SUB     BP, 2                   ; 構造体サイズ-2と-1に次のポインタ
+        MOV WORD [.aBottom2], BP        ; 格納
+
+        ; 変数名の比較
+        MOV WORD BP, [.aBottom1]
+        MOV WORD BP, [BP]
+        ADD     BP, 2                   ; 変数構造体の3バイト目から8文字が変数名
+        MACRO_MEMCMP SI, BP, 8          ; 比較結果はAX
+        CMP     AX, 0x0000
+        JZ      .searchNext             ; 一致すれば消す
+        
+        ; チェーンの最後まで見つからなければ終了
+        MOV WORD BP, [.aBottom1]
+        MOV WORD BP, [BP]
+        MOV     AX, BP
+        CMP     AX, 0x0000
+        JZ      .searchNotFound
+
+        ; 一致しなければ次へ
+        MOV WORD AX, [.aBottom2]
+        MOV WORD [.aBottom1], AX
+        JMP     .searchLoop
+
+.searchNotFound:
+        JMP     .exit                   ; 一旦
+
+.searchNext:
+        ; チェーンの復元
+        MOV WORD BP, [.aBottom2]        ; 変数2の末尾の住所
+        MOV WORD BP, [BP]               ; 変数2の末尾の住所に書かれている値(=変数3の住所)
+        MOV WORD SI, [.aBottom1]        ; 変数1の末尾の住所
+        MOV WORD [SI], BP               ; 変数1の末尾の住所に書かれている値を変数2の末尾の住所に書かれている値に書き換える
+
+        ; メモリの解放
+        MOV WORD BP, [.aHead2]
+        CALL    sysFree                 ; Head2の解放
+        JMP     .exit
+
+.exit:
         CALL    rPopReg                 ; レジスタ取得
         RET
-.aBottom1:
+.aBottom1:                              ; 消す１つ前の変数のチェーンアドレスが格納されているアドレス
         DW      0x0000
-.aHead2:
+.aHead2:                                ; 消す変数が格納されているアドレス
         DW      0x0000
-.aBottom2:
+.aBottom2:                              ; 消す変数のチェーンアドレスが格納されているアドレス
         DW      0x0000
 
 ; set コマンド
@@ -951,7 +999,7 @@ sysFree:
         SHR     DI, 0x04
 
 .freeLoop:                              ; 確保した先頭まで戻る
-        MOV BYTE AH, [DI]            ; sTbl[DI]
+        MOV BYTE AH, [DI]               ; sTbl[DI]
         CMP     AH, 0x00                ; 値が 0x00 なら異常メモリを入力している
         JZ      .next
         MOV BYTE [DI], 0x00
@@ -1490,7 +1538,7 @@ rReleaseToken:
 
         MOV     CX, 0x0000
         MOV BYTE [.aTokenNum], "0"
-.releaseLoop:
+.releaseLoop:                           ; __argv? を消す
         MOV WORD DX, [.aCnt]
         CMP     CX, DX
         JZ      .releaseBreak
@@ -1505,7 +1553,9 @@ rReleaseToken:
         INC     CX
         JMP     .releaseLoop  
 
-.releaseBreak:
+.releaseBreak:                          ; __argc を消す
+        MOV     SI, .aTokenCnt
+        CALL    sysUndim
 
         CALL    rPopReg
         RET
