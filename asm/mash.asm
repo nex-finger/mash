@@ -205,7 +205,7 @@ mashLoop:
 ; //////////////////////////////////////////////////////////////////////////// ;
 
 ; dim
-; __argc : 
+; __argc : 2 or 3
 ; __argv0: "dim"固定
 ; __argv1: 変数型
 ;               符号なし16bit整数: "uint"
@@ -220,6 +220,22 @@ mashLoop:
 comDim:
         CALL    rPushReg
 
+        ; コマンドライン引数の個数を確認
+        CALL    sysGetCmdLineCnt        ; __argcをセット
+        MOV     SI, BP
+        CALL    sysShellGet             ; DIに変数の内容の先頭ポインタが返却
+        ADD     DI, 10
+        MOV WORD DI, [DI]
+        CMP     DI, 0x0003
+        JZ      .cntOK
+        CMP     DI, 0x0004
+        JZ      .cntOK
+        JMP     .cntNG
+
+.cntNG:                                 ; コマンドライン引数の個数が異常
+        JMP     .cntNG                  ; 一旦
+
+.cntOK:
         ; 入力コマンドライン引数の整備
         MOV     AL, 1                   ; __argv1にセット
         CALL    sysSetCmdLineStr
@@ -358,8 +374,61 @@ comDim:
 ; undim
 comUndim:
         CALL    rPushReg
+
+        ; コマンドライン引数の個数を確認
+        CALL    sysGetCmdLineCnt        ; __argcをセット
+        MOV     SI, BP
+        CALL    sysShellGet             ; DIに変数の内容の先頭ポインタが返却
+        ADD     DI, 10
+        MOV WORD DI, [DI]
+        CMP     DI, 0x0002
+        JZ      .cntOK
+        JMP     .cntNG
+
+.cntNG:                                 ; コマンドライン引数の個数が異常
+        JMP     .cntNG                  ; 一旦
+
+.cntOK:
+        ; コピー(ヌル文字を含む場合表示に無理が出るため" "に変換する)
+        MOV     AL, 1
+        CALL    sysSetCmdLineStr        ; ALにすでに格納済み
+        CALL    sysGetCmdLineStr        ; BPに変数ポインタが返却
+        MOV     SI, BP
+        CALL    sysShellGet             ; DIに変数の内容の先頭ポインタが返却
+        ADD     DI, 11
+        MOV     SI, DI
+
+        MOV WORD DI, .aName
+        MOV     BH, 0x00                ; フラグはたたんでおく
+        MOV     CX, 0x0000
+.copyLoop:
+        MOV BYTE AH, [SI]
+
+        CMP     AH, 0x00                ; ヌル文字を発見移行は全て空白文字で埋める
+        JNZ     .copyFill               ; フラグはBHレジスタ
+        MOV     BH, 0x01                ; フラグセット
+.copyFill:
+        CMP     BH, 0x01                ; フラグが立っていれば空白文字に置換
+        JNZ     .copyComfirm
+        MOV     AH, " "
+.copyComfirm:                           ; 格納
+        MOV BYTE [DI], AH
+
+        INC     CX
+        CMP     CX, 0x0008              ; 8バイトコピーしたら終了
+        JZ      .copyNext
+        INC     SI
+        INC     DI
+        JMP     .copyLoop
+
+.copyNext:
+        MOV WORD SI, .aName
+        CALL    sysUndim
+
         CALL    rPopReg
         RET
+.aName:                                 ; 変数名の即値
+        DB      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 
 ; set
 comSet:
@@ -469,6 +538,9 @@ sCmdLineStr:                            ; コマンドライン引数のため�
 sCmdLineID:                             ; コマンドライン引数の __argv"x" の x の部分
         DB      "0 ", 0x00
 
+sCmdLineCnt:                            ; コマンドライン引数の個数を記録している変数型
+        DB      "__argc  ", 0x00
+
 ; static変数へのインターフェース
 
 ; コマンドライン引数の変数名セット
@@ -496,6 +568,13 @@ sysSetCmdLineStr:
 ; out : BP      コマンドライン変数名の先頭ポインタ
 sysGetCmdLineStr:
         MOV WORD BP, sCmdLineStr
+        RET
+
+; コマンドライン引数の個数をゲット
+; in  : なし
+; out : BP      
+sysGetCmdLineCnt:
+        MOV WORD BP, sCmdLineCnt
         RET
 
 ; <---- コマンドライン引数を複数用意すると冗長なためまとめた
