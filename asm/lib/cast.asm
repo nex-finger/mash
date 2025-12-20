@@ -5,6 +5,94 @@
 %ifndef     __CAST_ASM
 %define     __CAST_ASM
 
+; 10進文字列を2バイト変数へ変換(sint用)
+; -32768 ~ 32767 の範囲外については処理系依存
+; Decimal -> Int
+; in  : SI      変換元の10進文字列(ヌル文字を必ず最後につけること)
+; out : AX      返還後の16ビット即値
+libdtoi:
+        CALL    rPushReg
+
+        ; 1文字目に "+" か "-" があれば考慮する
+        MOV BYTE AH, [SI]
+        CMP     AH, "+"
+        JZ      .firstPlus              ; 1文字目が "+" なら1文字シーク
+        CMP     AH, "-"
+        JZ      .firstMinus             ; 1文字目が "-" なら1文字シークと反転
+        JMP     .firstNon               ; 1文字目がなにもなければそのまま
+.firstPlus:
+        MOV     BL, 0x00                ; BLが 0 なら符号反転なし
+        INC     SI                      ; 1文字シーク
+        JMP     .firstNext
+.firstMinus:
+        MOV     BL, 0x01                ; BLが 1 なら符号反転あり
+        INC     SI                      ; 1文字シーク
+        JMP     .firstNext
+.firstNon:
+        MOV     BL, 0x00
+        JMP     .firstNext
+
+.firstNext:
+        ; 10進を格納していく
+        MOV     CX, 0x0000
+
+.fillLoop:
+        MOV BYTE AH, [SI]
+        CMP     AH, 0x00
+        JZ      .inverse                ; ヌル文字まで到達した場合終了する
+
+        ADD     CX, CX                  ; 10倍にする、現在2倍
+        MOV     DX, CX
+        ADD     CX, DX                  ; 4倍
+        ADD     CX, DX                  ; 6倍
+        ADD     CX, DX                  ; 8倍
+        ADD     CX, DX                  ; 10倍
+
+        CALL    rdtoi1digit
+        CMP     AL, 0xff
+        JZ      .inputError             ; 入力文字が異常の場合終了
+
+        MOV     AH, 0x00
+        ADD     CX, AX
+        INC     SI
+        JMP     .fillLoop
+
+.inputError:                            ; 入力文字列が異常の場合
+        JMP     .inputError             ; 一旦
+
+.inverse:
+        ; 符号反転を行うかチェックし、必要な場合反転する
+        CMP     BL, 0x00
+        JZ      .fillPlus               ; 0x8000 が数値 0 を表す
+        JMP     .fillMinus
+.fillPlus:
+        ADD     CX, 0x8000
+        JMP     .exit
+.fillMinus:
+        MOV     DX, CX
+        MOV     CX, 0x8000
+        SUB     CX, DX
+        JMP     .exit
+
+.exit:
+        MOV WORD [.aRet], CX
+
+        CALL    rPopReg
+        MOV WORD AX, [.aRet]
+        RET
+.aRet:                                  ; 変換した16ビット
+        DW      0x0000
+
+; 16進文字列を2バイト変数へ変換(uint用)
+; 0x???? もしくは ????? の記述方法が可能
+; heX -> Int
+; in  : SI      変換元の10進文字列(ヌル文字を必ず差愛護につけること)
+; out : AX      変換後の16ビット即値
+libxtoi:
+        CALL    rPushReg
+        CALL    rPopReg
+        RET
+
 ; 1バイト変数を16進文字列へ変換
 ; Int -> heX
 ; in  : AH      変換元の1バイト即値
@@ -245,6 +333,28 @@ ritox1digit:
         MOV BYTE AL, [.aRet]                 ; 戻り値設定
         RET
 .aRet:
+        DB      0x00
+
+; 10進文字(1文字) → 10進数値
+; in  : AH      10進文字('0' ~ '9')
+; out : AL      0x00 ~ 0x09: 正常変換値
+;               0xff: 異常変換値
+rdtoi1digit:
+        CALL    rPushReg
+
+        MOV BYTE [.aRet], 0xff
+        CMP     AH, "0"
+        JB      .exit
+        CMP     AH, "9"
+        JA      .exit
+        SUB     AH, "0"                 ; 文字コードは連続している
+        MOV BYTE [.aRet], AH
+
+.exit:
+        CALL    rPopReg
+        MOV BYTE AL, [.aRet]
+        RET
+.aRet:                                  ; 戻り値
         DB      0x00
 
 %endif  ; __CAST_ASM

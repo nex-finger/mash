@@ -45,7 +45,7 @@ cVersionLen:                            ; 版数文字列の長さ
         DW      18
 
 cVersionStr:                            ; 版数文字列の内容
-        DB      "mash system v0.3.6"
+        DB      "mash system v0.4.0"
 
 ; //////////////////////////////////////////////////////////////////////////// ;
 ; --- 変数 ---
@@ -115,27 +115,27 @@ mashInit:
         CALL    sysDim
 
         ; デバッグ ---->
-                MOV     AH, 0x00                ; テスト変数
-                MOV     SI, .aTestValue01
-                CALL    sysDim                  ; 定義
+                ;MOV     AH, 0x00                ; テスト変数
+                ;MOV     SI, .aTestValue01
+                ;CALL    sysDim                  ; 定義
 
-                MOV     AH, 0x10                ; テスト変数
-                MOV     AL, 3                   ; 要素数は3
-                MOV     SI, .aTestValue02
-                CALL    sysDim                  ; 定義
+                ;MOV     AH, 0x10                ; テスト変数
+                ;MOV     AL, 3                   ; 要素数は3
+                ;MOV     SI, .aTestValue02
+                ;CALL    sysDim                  ; 定義
 
-                MOV     AH, 0x01                ; テスト変数
-                MOV     SI, .aTestValue03
-                CALL    sysDim                  ; 定義
+                ;MOV     AH, 0x01                ; テスト変数
+                ;MOV     SI, .aTestValue03
+                ;CALL    sysDim                  ; 定義
 
-                MOV     AH, 0x02                ; テスト変数
-                MOV     SI, .aTestValue04
-                CALL    sysDim                  ; 定義
+                ;MOV     AH, 0x02                ; テスト変数
+                ;MOV     SI, .aTestValue04
+                ;CALL    sysDim                  ; 定義
 
-                MOV     AH, 0x12                ; テスト変数
-                MOV     AL, 0x15                ; 要素数は3
-                MOV     SI, .aTestValue05
-                CALL    sysDim    
+                ;MOV     AH, 0x12                ; テスト変数
+                ;MOV     AL, 0x15                ; 要素数は3
+                ;MOV     SI, .aTestValue05
+                ;CALL    sysDim    
 
                 ;CALL    sysList                 ; 一覧表示
         ; <----
@@ -220,13 +220,140 @@ mashLoop:
 comDim:
         CALL    rPushReg
 
+        ; 入力コマンドライン引数の整備
+        MOV     AL, 1                   ; __argv1にセット
+        CALL    sysSetCmdLineStr
+        CALL    sysGetCmdLineStr        ; BPに変数ポインタが返却
+        MOV     SI, BP
+        CALL    sysShellGet             ; DIに変数の内容の先頭ポインタが返却
+
+        ADD     DI, 11
+        MOV WORD SI, DI           ; 格納
+.checkTypeUint:
+        MOV WORD DI, .aStrUint          ; uint
+        CALL    libStrcmp
+        CMP     AX, 0x0000
+        JNZ     .checkTypeSint
+        MOV BYTE [.aType], 0x00
+        MOV     AL, 2                   ; uint の場合変数名は __argv2
+        JMP     .checkTypeNext
+.checkTypeSint:
+        MOV WORD DI, .aStrSint          ; sint
+        CALL    libStrcmp
+        CMP     AX, 0x0000
+        JNZ     .checkTypeChar
+        MOV BYTE [.aType], 0x01
+        MOV     AL, 2
+        JMP     .checkTypeNext
+.checkTypeChar:
+        MOV WORD DI, .aStrChar          ; char
+        CALL    libStrcmp
+        CMP     AX, 0x0000
+        JNZ     .checkTypeArray
+        MOV BYTE [.aType], 0x02
+        MOV     AL, 2
+        JMP     .checkTypeNext
+.checkTypeArray:
+        MOV WORD DI, .aStrArray         ; array
+        CALL    libStrcmp
+        CMP     AX, 0x0000
+        JNZ     .checkTypeString
+        MOV BYTE [.aType], 0x10
+        CALL    .checkLen               ; 要素数を格納
+        MOV     AL, 3                   ; array の場合変数名は __argv3
+        JMP     .checkTypeNext
+.checkTypeString:
+        MOV WORD DI, .aStrString        ; string
+        CALL    libStrcmp
+        CMP     AX, 0x0000
+        JNZ     .checkTypeError
+        MOV BYTE [.aType], 0x12
+        CALL    .checkLen               ; 要素数を格納
+        MOV     AL, 3
+        JMP     .checkTypeNext
+.checkTypeError:                        ; 異常入力
+        JMP     .checkTypeError         ; 一旦
+
+.checkLen:
         ; argv2の整数化
-        ; 入力パラメータの妥当性確認
-        ; コマンドライン引数 -> システムコールで利用できる形に変換
+        MOV     AL, 2                   ; __argv2にセット
+        CALL    sysSetCmdLineStr
+        CALL    sysGetCmdLineStr        ; BPに変数ポインタが返却
+        MOV     SI, BP
+        CALL    sysShellGet             ; DIに変数の内容の先頭ポインタが返却
+        ADD     DI, 11
+
+        MOV     SI, DI
+        CALL    libdtoi                 ; 変換結果をAXに格納(sint用なので 0=0x8000 )
+        SUB     AX, 0x8000
+        ; デバッグ ---->
+                ;PUSH    AX
+                ;MOV WORD AX, AX
+                ;CALL    dbgPrint16bit           ; デバッグ
+                ;POP     AX
+        ;.dbgHlt:
+                ;JMP     .dbgHlt
+        ; <----
+        MOV BYTE [.aLen], AL
+        RET
+
+.checkTypeNext:
+        CALL    sysSetCmdLineStr        ; ALにすでに格納済み
+        CALL    sysGetCmdLineStr        ; BPに変数ポインタが返却
+        MOV     SI, BP
+        CALL    sysShellGet             ; DIに変数の内容の先頭ポインタが返却
+        ADD     DI, 11
+        MOV     SI, DI
+
+        ; コピー(ヌル文字を含む場合表示に無理が出るため" "に変換する)
+        MOV WORD DI, .aName
+        MOV     BH, 0x00                ; フラグはたたんでおく
+        MOV     CX, 0x0000
+.copyLoop:
+        MOV BYTE AH, [SI]
+
+        CMP     AH, 0x00                ; ヌル文字を発見移行は全て空白文字で埋める
+        JNZ     .copyFill               ; フラグはBHレジスタ
+        MOV     BH, 0x01                ; フラグセット
+.copyFill:
+        CMP     BH, 0x01                ; フラグが立っていれば空白文字に置換
+        JNZ     .copyComfirm
+        MOV     AH, " "
+.copyComfirm:                           ; 格納
+        MOV BYTE [DI], AH
+
+        INC     CX
+        CMP     CX, 0x0008              ; 8バイトコピーしたら終了
+        JZ      .copyNext
+        INC     SI
+        INC     DI
+        JMP     .copyLoop
+
+.copyNext:
+        ; コマンドの実行
+        MOV BYTE AH, [.aType]
+        MOV BYTE AL, [.aLen]
+        MOV WORD SI, .aName
         CALL    sysDim                  ; 実行
 
         CALL    rPopReg
         RET
+.aType:                                 ; 変数型
+        DB      0x00
+.aLen:                                  ; 配列の長さ
+        DB      0x00
+.aName:                                 ; 変数名の即値
+        DB      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+.aStrUint:                              ; 変数タイプのリファレンス
+        DB      "uint", 0x00
+.aStrSint:
+        DB      "sint", 0x00
+.aStrChar:
+        DB      "char", 0x00
+.aStrArray:
+        DB      "array", 0x00
+.aStrString:
+        DB      "string", 0x00
 
 ; undim
 comUndim:
@@ -249,7 +376,7 @@ comEcho:
 ; list
 ; __argc  : 制限なし
 ; __argv0 : "list"固定
-; __argv1~: テストもかねてそのまま表示
+; __argv1~argv9: テストもかねてそのまま表示
 comList:
         CALL    rPushReg
 
@@ -333,6 +460,45 @@ comLift:
 ; ██████╔╝   ██║   ██████╔╝     ╚██████╗██║  ██║███████╗███████╗
 ; ╚═════╝    ╚═╝   ╚═════╝       ╚═════╝╚═╝  ╚═╝╚══════╝╚══════╝
 ; //////////////////////////////////////////////////////////////////////////// ;
+
+; コマンドライン引数を複数用意すると冗長なためまとめる ---->
+
+; static変数
+sCmdLineStr:                            ; コマンドライン引数のためのひな形
+        DB      "__argv"
+sCmdLineID:                             ; コマンドライン引数の __argv"x" の x の部分
+        DB      "0 ", 0x00
+
+; static変数へのインターフェース
+
+; コマンドライン引数の変数名セット
+; __argv0 ~ __argv9 のうち、任意の一桁の内容に変数名を更新する
+; in  : AL      更新するナンバリング
+;               0x00 ~ 0x09: 変更可能
+;               0x0a ~ : 変更不可(エラー返却)
+sysSetCmdLineStr:
+        CALL    rPushReg
+
+        ; 入力パラメータ確認
+        CMP     AL, 0x09
+        JA      .exit                   ; 0~9 の範囲外の場合変更せず終了
+
+        ADD     AL, "0"
+        MOV BYTE [sCmdLineID], AL       ; 更新
+
+.exit:
+        CALL    rPopReg
+        RET
+
+; コマンドライン引数の変数名ゲット
+; 設定したコマンドライン引数の内容を返却する
+; in  : なし
+; out : BP      コマンドライン変数名の先頭ポインタ
+sysGetCmdLineStr:
+        MOV WORD BP, sCmdLineStr
+        RET
+
+; <---- コマンドライン引数を複数用意すると冗長なためまとめた
 
 ; dim コマンド内部制御
 ; シェル変数を追加する
@@ -1152,7 +1318,7 @@ sysCheckAndRunCommand:
         ; ↓↓↓ コマンド実行！！ ↓↓↓
         CALL    SI
         ; ↑↑↑ コマンド実行！！ ↑↑↑
-        
+
         JMP     .exit
 
 .BIchkNotFound:
