@@ -1252,16 +1252,10 @@ sysLift:
         JMP     .printFlameLoop
         
 .printFlameBreak:
-        CALL    rWait1sec
-        CALL    rWait1sec
-        CALL    rWait1sec
-        CALL    rWait1sec
-        CALL    rWait1sec
-        
         MOV     BP, .aDoor1
 
         MOV BYTE AH, [sYpos]            ; 座標を更新
-        SUB     AH, 10
+        SUB     AH, 11
         MOV BYTE [sYpos], AH
 
 ; スプライトのループ
