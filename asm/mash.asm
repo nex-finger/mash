@@ -435,6 +435,15 @@ comUndim:
         DB      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 
 ; set
+; __argc : 2
+; __argv0: "set"固定
+; __argv1: 変数名
+; __argv2: 要素数(array, string時のみ有効)
+;               "0" ~ "255"の範囲
+; __argv3: セットする数
+;               0x????: 16進整数
+;               ?????: 10進整数
+;               "?": 文字
 comSet:
         CALL    rPushReg
 

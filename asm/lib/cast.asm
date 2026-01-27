@@ -5,11 +5,55 @@
 %ifndef     __CAST_ASM
 %define     __CAST_ASM
 
+; 文字列を2バイト変数へ変換
+; 16進数、10進数、文字
+; in  : SI      変換元の文字列(ヌル文字を必ず最後につけること)
+;                       16進数: 0x????
+;                       10進数: ?????(マイナスOK)
+;                       ascii:   "?"
+; out : AX      変換後の16ビット即値
+libstoi:
+        CALL    rPushReg
+
+        ; 将来的にここで文字列の構文解析を行う？
+
+        MOV     DI, SI
+        MOV BYTE AH, [DI]               ; 1文字目取得
+        CMP     AH, 0x22                ; "=0x22
+        JZ      .caseAscii              ; ascii変換
+        INC     DI
+        MOV BYTE AH, [DI]               ; 2文字目取得(1文字目だけでは10進か16進か判断できないため)
+        CMP     AH, "x"
+        JZ      .caseHex
+        JMP     .caseDecimal
+
+.fillNumber:
+
+        CALL    rPopReg
+        MOV WORD AX, [.aRet]
+        RET
+
+; ascii→数値の変換
+.caseAscii:
+        INC     SI                      ; 変換したいデータは2文字目なので("a")
+        MOV BYTE AL, [SI]
+        MOV     AH, 0                   ; 下8bitにデータを
+        JMP     .fillNumber
+.caseHex:
+        MOV     BH, 1                   ; 0xあり
+        CALL    libxtoi
+        JMP     .fillNumber
+.caseDecimal:
+        CALL    libdtoi
+        JMP     .fillNumber
+.aRet:                                  ; 変換した16ビット
+        DW      0x0000
+
 ; 10進文字列を2バイト変数へ変換(sint用)
 ; -32768 ~ 32767 の範囲外については処理系依存
 ; Decimal -> Int
 ; in  : SI      変換元の10進文字列(ヌル文字を必ず最後につけること)
-; out : AX      返還後の16ビット即値
+; out : AX      変換後の16ビット即値
 libdtoi:
         CALL    rPushReg
 
