@@ -130,12 +130,40 @@ libdtoi:
 ; 16進文字列を2バイト変数へ変換(uint用)
 ; 0x???? もしくは ????? の記述方法が可能
 ; heX -> Int
-; in  : SI      変換元の10進文字列(ヌル文字を必ず差愛護につけること)
+; in  : SI      変換元の10進文字列(ヌル文字を必ず最後につけること)
+;       BH      0: 0xなし
+;               1: 0xあり
 ; out : AX      変換後の16ビット即値
 libxtoi:
         CALL    rPushReg
+
+        MOV     CX, 0x0000
+        MOV WORD [.aRet], 0x0000
+
+        ; "0x"があるか確認
+        CMP     BH, 1
+        JNZ     .calc_loop              ; 0xなし なので文字飛ばさず
+        ADD     SI, 2
+        JMP     .calc_loop              ; 0あり なので2文字飛ばす
+
+.calc_loop:
+        MOV BYTE AH, [SI]
+        CALL    rxtoi1digit             ; 1文字ずつ数値化、ALに即値格納
+        MOV WORD BX, [.aRet]
+        SHL     BX, 4                   ; 4ビットシフトして格納
+        ADD     BL, AL
+        MOV WORD [.aRet], BX
+
+        DEC     CX                      ; 4桁繰り返したら終わり
+        CMP     CX, 0x0000
+        JZ      .exit
+        JMP     .calc_loop
+
+.exit:
         CALL    rPopReg
         RET
+.aRet:
+        DW      0x0000
 
 ; 1バイト変数を16進文字列へ変換
 ; Int -> heX
@@ -352,7 +380,60 @@ libitod:
 
 ; ファイル内サブルーチン
 
-; 16進数値 → 16進文字 (1文字)
+; 16進文字(1文字) → 16進数値
+; in  : AH      16進文字('0' ~ '9' or 'A' ~ 'F' or 'a' ~ 'f')
+; out : AL      16進数値(0x00 ~ 0x0f)
+;               0xff: 入力パラメータ異常
+rxtoi1digit:
+        CALL    rPushReg
+
+        MOV BYTE [.aInput], AH
+
+        MOV BYTE AL, [.aInput]
+        CALL    libIsxdigit             ; AH=0なら16進以外、0以外なら16進文字
+        CMP     AH, 0x00
+        JZ      .error                  ; 16進以外なので異常値返却
+
+        ; 16進を大文字に限定したのち変換
+        MOV BYTE AL, [.aInput]
+        CALL    libToupper              ; AHに大文字変換後のasciiコード
+
+        ; 大文字か確認
+.checkUpper:
+        MOV BYTE AL, [.aInput]
+        CALL    libIsupper
+        CMP     AH, 0
+        JZ      .checkDigit
+        MOV BYTE AL, [.aInput]          ; 大文字の16進数
+        SUB     AL, "A"                 ; Cなら "C" - "A" = 2
+        ADD     AL, 10                  ; Cなら 2+10 = 12
+        MOV BYTE [.aRet], AL
+        JMP     .exit
+
+        ; 数字か確認
+.checkDigit:
+        MOV BYTE AL, [.aInput]
+        CALL    libIsdigit
+        CMP     AH, 0
+        JZ      .error                  ; A~F でも 0~9 でもないので異常
+        MOV BYTE AL, [.aInput]          ; 数字の16進数
+        SUB     AL, "0"                 ; 6なら "6" - "0" = 6
+        MOV BYTE [.aRet], AL
+        JMP     .exit
+
+.error:
+        MOV BYTE [.aRet], 0xff
+        JMP     .exit
+.exit:
+        CALL    rPopReg
+        MOV BYTE AL, [.aRet]
+        RET
+.aRet:
+        DB      0x00
+.aInput:
+        DB      0x00
+
+; 16進数値 → 16進文字(1文字)
 ; in  : AH      16進数値(0x00 ~ 0x0f)
 ; out : AL      16進文字('0' ~ 'f')
 ritox1digit:
@@ -400,5 +481,13 @@ rdtoi1digit:
         RET
 .aRet:                                  ; 戻り値
         DB      0x00
+
+; 10進数値 → 10進文字(1文字)
+; in  : AH
+; out : AL
+ritod1digit:
+        CALL    rPushReg
+        CALL    rPopReg
+        RET
 
 %endif  ; __CAST_ASM
