@@ -449,12 +449,52 @@ comSet:
 
         ; コマンドライン引数の個数を確認
 
+        ; セットする数(__argv3)を取得
+        MOV     AL, 3                   ; __argv3にセット
+        CALL    sysSetCmdLineStr
+        CALL    sysGetCmdLineStr        ; BPに変数ポインタが返却
+        MOV     SI, BP
+        CALL    sysShellGet             ; DIに変数の内容の先頭ポインタが返却
+
+        ADD     DI, 11
+        MOV WORD SI, DI                 ; SIにセットする数を表した文字列を格納
+
+        ; 文字列 → 数値
+        CALL    libstoi                 ; in=SI, out=AX
+        PUSH    AX                      ; ->数値
+
+        ; システムコールの形に整形
+
+        ; セットする変数名(__argv1)を取得
+        MOV     AL, 1                   ; __argv1にセット
+        CALL    sysSetCmdLineStr
+        CALL    sysGetCmdLineStr        ; BPに変数ポインタが返却
+        MOV     SI, BP
+        CALL    sysShellGet             ; DIに変数の内容の先頭ポインタが返却
+
+        ADD     DI, 11
+        MOV WORD SI, DI                 ; SIにセットする数を表した文字列を格納
+        PUSH    SI                      ; ->変数名
+
+        ; 要素数(__argv2)を取得
+        MOV     AL, 2                   ; __argv2にセット
+        CALL    sysSetCmdLineStr
+        CALL    sysGetCmdLineStr        ; BPに変数ポインタが返却
+        MOV     SI, BP
+        CALL    sysShellGet             ; DIに変数の内容の先頭ポインタが返却
+
+        ADD     DI, 11
+        MOV WORD SI, DI                 ; SIにセットする数を表した文字列を格納(まだ文字列！)
+        CALL    libdtoi                 ; 10進文字列 -> バイナリ変換
+        PUSH    AX                      ; ->要素数
+
         ; SI 変数名
         ; AL 要素番号
         ; BX 格納値
-        CALL    sysSet
-
-        CALL    libstoi                 ; in=SI, out=AX
+        POP     AX                      ; <-要素数
+        POP     SI                      ; <-変数名
+        POP     BX                      ; <-格納値
+        CALL    sysSet                  ; システムコール
 
         CALL    rPopReg
         RET
