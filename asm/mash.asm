@@ -447,10 +447,14 @@ comUndim:
 comSet:
         CALL    rPushReg
 
+        ; コマンドライン引数の個数を確認
+
         ; SI 変数名
         ; AL 要素番号
         ; BX 格納値
         CALL    sysSet
+
+        CALL    libstoi                 ; in=SI, out=AX
 
         CALL    rPopReg
         RET
