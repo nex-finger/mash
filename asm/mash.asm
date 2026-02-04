@@ -1997,6 +1997,9 @@ sysPrint:
 ; cast.asm
 %include        "../asm/lib/cast.asm"
 
+; ディスクアクセスマクロ
+%include        "../asm/lib/disk.asm"
+
 ; //////////////////////////////////////////////////////////////////////////// ;
 ; stdio.h                                                                      ;
 ;       libPutchar      libPuts         libsParse       libsPrintf             ;
