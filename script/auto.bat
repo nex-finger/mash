@@ -10,6 +10,7 @@ nasm -f bin ../asm/disk/usr.asm -o usr.bin
 nasm -f bin ../asm/disk/readme.asm -o readme.bin
 nasm -f bin ../asm/disk/testprg.asm -o testprg.bin
 nasm -f bin ../asm/disk/testtxt.asm -o testtxt.bin
+nasm -f bin ../asm/disk/doc.asm -o doc.bin
 
 makedisk.exe ../bin/mash.img
 
@@ -23,3 +24,4 @@ move usr.bin ../bin/usr.bin
 move readme.bin ../bin/readme.bin
 move testprg.bin ../bin/testprg.bin
 move testtxt.bin ../bin/testtxt.bin
+move doc.bin ../bin/doc.bin

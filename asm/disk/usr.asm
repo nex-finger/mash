@@ -3,6 +3,7 @@
 ;    ├bin.dir
 ;    │   └testprg.bin
 ;    ├usr.dir
+;    │   ├doc.dir
 ;    |   └testtxt.txt
 ;    └readme.txt
 %include        "../asm/define.asm"
@@ -13,7 +14,8 @@
         DB      0x25, 0x10, 0x04, 0x06, 0x01, 0x23  ; 作成時刻6バイト
         DB      0x25, 0x10, 0x04, 0x06, 0x01, 0x23  ; 更新時刻6バイト
         DW      DIR_ROOT                ; 親ディレクトリ
-        DB      0x01                    ; 子ディレクトリは1つ
-        DW      DIR_TESTTXT             ; 子ディレクトリ一覧
+        DB      0x02                    ; 子ディレクトリは2つ
+        DW      DIR_DOC                 ; 子ディレクトリ一覧
+        DW      DIR_TESTTXT
 
 		times 512-($-$$) DB 0           ; セクタ末尾まで

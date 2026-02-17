@@ -25,6 +25,7 @@
 ; usr一覧
 %define     DIR_TESTTXT         0x001b
 %define     DIR_TESTTXT_CONTENT 0x001c
+%define     DIR_DOC             0x001d
 
 ; --- ディレクトセクタ ---
 ; アトリビュート

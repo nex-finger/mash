@@ -3,6 +3,7 @@
 ;    ├bin.dir
 ;    │   └testprg.bin
 ;    ├usr.dir
+;    │   ├doc.dir
 ;    |   └testtxt.txt
 ;    └readme.txt
 %include        "../asm/define.asm"

@@ -48,6 +48,29 @@ libAllocSector:
 ; out : なし
 libFreeSector:
         CALL    rPushReg
+
+        ; ビットフィールド用のメモリ確保
+        MOV     CX, 512
+        CALL    sysMalloc
+
+        ; ビットフィールドの読み込み
+        MOV     SI, BP
+        MOV     AX, 0x0013
+        CALL    libReadSector
+
+        ; ビットフィールド編集
+        MOV     CX, AX
+        MOV     AH, 0x00
+        CALL    libDiskBitSet
+
+        ; ビットフィールドの書き込み
+        MOV     AX, 0x0013
+        CALL    libWriteSector
+
+        ; ビットフィールド用メモリ解放
+        MOV     BP, SI
+        CALL    sysFree
+
         CALL    rPopReg
         RET
 
@@ -57,6 +80,20 @@ libFreeSector:
 ; out : なし
 libWriteSector:
         CALL    rPushReg
+
+        ; 論理セクタから物理セクタへ変換
+        MOV     DX, AX
+        CALL    lbaToChs
+
+        MOV     AX, 0x0000              ; 一応ｾｸﾞﾎﾟ
+        MOV     ES, AX
+
+        MOV     AH, 0x03                ; 書き込み
+        MOV     AL, 0x01                ; セクタ数
+        MOV     DL, 0x00                ; ディスク番号
+        MOV     BX, SI                  ; 書き込みアドレス
+        INT     0x13                    ; ヘッド、シリンダ、セクタは登録済み
+        
         CALL    rPopReg
         RET
 
@@ -70,7 +107,7 @@ libReadSector:
         MOV     DX, AX
         CALL    lbaToChs
 
-        MOV     AX, 0x0000
+        MOV     AX, 0x0000              ; 一応ｾｸﾞﾎﾟ
         MOV     ES, AX
 
         MOV     AH, 0x02                ; 読み込み

@@ -45,7 +45,7 @@ cVersionLen:                            ; 版数文字列の長さ
         DW      18
 
 cVersionStr:                            ; 版数文字列の内容
-        DB      "mash system v0.4.1"
+        DB      "mash system v0.5.0"
 
 ; //////////////////////////////////////////////////////////////////////////// ;
 ; --- 変数 ---
@@ -79,12 +79,13 @@ sOneLineBuf:
 sOneLineSeek:
         DW      0x0000                  ; シークオフセット
 
-sNowDir:
-        DW      DIR_ROOT                ; 現在いるディレクトリ
-
 ; シェル変数関連
 sTopValAddr:
         DW      0x0000                  ; シェル変数の連結リストの先頭アドレス
+
+; 現在アクティブなセクタ
+sActiveSector:
+        DW      0x0000
 
 ; //////////////////////////////////////////////////////////////////////////// ;
 ; --- 初期化プログラム ---
@@ -114,6 +115,9 @@ mashInit:
         MOV     SI, .aInitialValue
         CALL    sysDim
 
+        ; アクティブセクタをrootに設定
+        MOV WORD [sActiveSector], DIR_BIN
+
         ; デバッグ ---->
                 ;MOV     AH, 0x00                ; テスト変数
                 ;MOV     SI, .aTestValue01
@@ -141,34 +145,43 @@ mashInit:
         ; <----
 
         ; デバッグ ---->
-                MOV     CX, 512
-                CALL    sysMalloc
+                ;MOV     CX, 512                 ; メモリ確保
+                ;CALL    sysMalloc
 
-                MOV     SI, BP
-                MOV     AX, 0x0013
+                ;MOV     SI, BP                  ; セクタ読み込み
+                ;MOV     AX, 0x0013
+                ;CALL    libReadSector
 
-                CALL    libReadSector
+                ;MOV     CX, 0x0012              ; 編集
+                ;MOV     AH, 0x00
+                ;CALL    libDiskBitSet
 
-                MOV     CX, 0x0012
-                MOV     AH, 0x00
-                CALL    libDiskBitSet
+                ;MOV     CX, 0x0023
+                ;MOV     AH, 0x01
+                ;CALL    libDiskBitSet
 
-                MOV     CX, 0x0023
-                MOV     AH, 0x01
-                CALL    libDiskBitSet
+                ;MOV     AX, 0x0013              ; セクタ書き込み
+                ;CALL    libWriteSector
 
-                MOV     CX, 0x0000
-        .testLoop:
-                CALL    libDiskBitGet
+                ;MOV     CX, 0x0023              ; ダミー
+                ;MOV     AH, 0x00
+                ;CALL    libDiskBitSet
 
-                MOV     AL, AH
-                ADD     AL, 0x30
-                CALL    libPutchar
-                CALL    libSetCursolNextCol
+                ;MOV     AX, 0x0013              ; セクタ再度読み込み
+                ;CALL    libReadSector
 
-                INC     CX
-                CMP     CX, 64
-                JNZ     .testLoop
+                ;MOV     CX, 0x0000
+        ;.testLoop:
+                ;CALL    libDiskBitGet
+
+                ;MOV     AL, AH
+                ;ADD     AL, 0x30
+                ;CALL    libPutchar
+                ;CALL    libSetCursolNextCol
+
+                ;INC     CX
+                ;CMP     CX, 64
+                ;JNZ     .testLoop
         ;.testHlt:
                 ;JMP     .testHlt
         ; <----
@@ -557,8 +570,14 @@ comPwd:
         RET
 
 ; dir
+; __argc  : 制限なし
+; __argv0 : "dir"固定
+; __argv1~argv9: 考慮しない
 comDir:
         CALL    rPushReg
+
+        CALL    sysDir
+
         CALL    rPopReg
         RET
 
@@ -1488,18 +1507,79 @@ rWait1sec:
 sysDir:
         CALL    rPushReg                ; レジスタ退避
 
-        MOV     CX, 0x0200              ; 現在のディレクトリ用のメモリを取得
+        ; 現在アクティブなセクタを読み込む
+        MOV     CX, 512                 ; メモリ確保
         CALL    sysMalloc
-        MOV WORD [.allocAddr1], BP
-        MOV     CX, 0x0200              ; リンク先のディレクトリ用のメモリを取得
-        CALL    sysMalloc
-        MOV WORD [.allocAddr2], BP
+        MOV WORD [.aActiveSector], BP
 
+        MOV WORD SI, [.aActiveSector]   ; セクタ読み込み
+        MOV WORD AX, [sActiveSector]
+        CALL    libReadSector
+
+        ; 子ディレクトリの数を取得する
+        MOV WORD SI, [.aActiveSector]
+        ADD     SI, 26
+        MOV BYTE CH, [SI]
+        PUSH    CX
+        INC     SI
+
+        ; 各子ディレクトリのセクタを読み込みディレクトリ名を取得する
+        ; 子ディレクトリ１つずつに対し処理
+.dirLoop:
+        POP     CX                      ; ループ終了チェック
+        CMP     CH, 0x00
+        JZ      .exit
+        DEC     CH
+        PUSH    CX
+
+        PUSH    SI
+        MOV WORD AX, [SI]               ; セクタ番号を取得
+
+        MOV     CX, 512                 ; メモリ確保
+        CALL    sysMalloc
+        MOV WORD [.aSubSector], BP
+
+        MOV WORD SI, [.aSubSector]      ; 子ディレクトリのセクタを読み出す
+        CALL    libReadSector
+
+        ADD     SI, 1                   ; ファイル名を表示
+        MOV     BP, SI
+        CALL    libPutsNoCRLF
+
+        MOV     AL, "."                 ; ピリオドを表示
+        CALL    libPutchar
+        CALL    libSetCursolNextCol
+
+        ADD     SI, 8                   ; 拡張子を表示(3文字)
+        MOV BYTE AL, [SI]
+        CALL    libPutchar
+        CALL    libSetCursolNextCol
+
+        INC     SI
+        MOV BYTE AL, [SI]
+        CALL    libPutchar
+        CALL    libSetCursolNextCol
+
+        INC     SI
+        MOV BYTE AL, [SI]
+        CALL    libPutchar
+        CALL    libSetCursolNextCol
+        CALL    libSetCursolNextLine
+
+        MOV WORD BP, [.aSubSector]      ; 子ディレクトリのメモリ解放
+        CALL    sysFree
+
+        POP     SI                      ; 次のディレクトリへ
+        ADD     SI, 2
+
+        JMP     .dirLoop
+
+.exit:
         CALL    rPopReg                 ; レジスタ取得
         RET
-.allocAddr1:
+.aActiveSector:
         DB      0x00, 0x00
-.allocAddr2:
+.aSubSector:
         DB      0x00, 0x00
 
 ; pwd コマンド内部制御
