@@ -45,7 +45,7 @@ cVersionLen:                            ; 版数文字列の長さ
         DW      18
 
 cVersionStr:                            ; 版数文字列の内容
-        DB      "mash system v0.4.0"
+        DB      "mash system v0.4.1"
 
 ; //////////////////////////////////////////////////////////////////////////// ;
 ; --- 変数 ---
@@ -138,6 +138,39 @@ mashInit:
                 ;CALL    sysDim    
 
                 ;CALL    sysList                 ; 一覧表示
+        ; <----
+
+        ; デバッグ ---->
+                MOV     CX, 512
+                CALL    sysMalloc
+
+                MOV     SI, BP
+                MOV     AX, 0x0013
+
+                CALL    libReadSector
+
+                MOV     CX, 0x0012
+                MOV     AH, 0x00
+                CALL    libDiskBitSet
+
+                MOV     CX, 0x0023
+                MOV     AH, 0x01
+                CALL    libDiskBitSet
+
+                MOV     CX, 0x0000
+        .testLoop:
+                CALL    libDiskBitGet
+
+                MOV     AL, AH
+                ADD     AL, 0x30
+                CALL    libPutchar
+                CALL    libSetCursolNextCol
+
+                INC     CX
+                CMP     CX, 64
+                JNZ     .testLoop
+        ;.testHlt:
+                ;JMP     .testHlt
         ; <----
         
         JMP     mashLoop                ; ループ処理へ移行

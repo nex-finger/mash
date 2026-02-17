@@ -10,15 +10,21 @@
 
 ; --- ディレクトリ構造 ---
 ; root
-%define     DIR_ROOT            0x0015
+%define     DIR_ROOT            0x0014
 
 ; root一覧
-%define     DIR_BIN             0x0016
-%define     DIR_USR             0x0017
-%define     DIR_README          0x0018
+%define     DIR_BIN             0x0015
+%define     DIR_USR             0x0016
+%define     DIR_README          0x0017
+%define     DIR_README_CONTENT  0x0018
 
 ; bin一覧
-%define     DIR_TEST            0x0019
+%define     DIR_TESTPRG         0x0019
+%define     DIR_TESTPRG_CONTENT 0x001a
+
+; usr一覧
+%define     DIR_TESTTXT         0x001b
+%define     DIR_TESTTXT_CONTENT 0x001c
 
 ; --- ディレクトセクタ ---
 ; アトリビュート

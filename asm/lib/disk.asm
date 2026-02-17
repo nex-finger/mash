@@ -65,6 +65,20 @@ libWriteSector:
 ; i/o : SI      読み込んだデータポインタ
 libReadSector:
         CALL    rPushReg
+
+        ; 論理セクタから物理セクタへ変換
+        MOV     DX, AX
+        CALL    lbaToChs
+
+        MOV     AX, 0x0000
+        MOV     ES, AX
+
+        MOV     AH, 0x02                ; 読み込み
+        MOV     AL, 0x01                ; セクタ数
+        MOV     DL, 0x00                ; ディスク番号
+        MOV     BX, SI                  ; 書き込みアドレス
+        INT     0x13                    ; ヘッド、シリンダ、セクタは登録済み
+
         CALL    rPopReg
         RET
 
@@ -137,8 +151,46 @@ lbaToChs:
 ; out : なし
 libDiskBitSet:
         CALL    rPushReg
+        MOV BYTE [.aInput], AH
+
+        ; 下位3ビットの保持
+        MOV     BX, CX
+        AND     BX, 0x0007
+
+        ; バイト目のスキップ
+        MOV     AX, CX
+        SHR     AX, 3
+        ADD     SI, AX
+
+        ; ビット目の探索
+        MOV     AH, 0x80
+.bitShiftLoop:
+        CMP     BL, 0x00
+        JZ      .bitShiftNext
+        SHR     AH, 1
+        DEC     BL
+        JMP     .bitShiftLoop
+.bitShiftNext:
+        MOV BYTE AL, [.aInput]
+        CMP     AL, 0x00
+        JZ      .setZero
+.setOne:
+        MOV     AL, [SI]
+        OR     AH, AL
+        MOV BYTE [SI], AH
+        JMP     .aExit
+.setZero:
+        MOV     AL, [SI]
+        NOT     AH
+        AND     AH, AL
+        MOV BYTE [SI], AH
+        JMP     .aExit
+
+.aExit:
         CALL    rPopReg
         RET
+.aInput:
+        DB      0x00
 
 ; ビットフィールドの内容を取得する
 ; in  : CX      読み込むビット目
@@ -146,5 +198,35 @@ libDiskBitSet:
 ; out : AH      読み込んだ値(0 or 1)
 libDiskBitGet:
         CALL    rPushReg
+        MOV BYTE [.aRet], 0x00
+
+        ; 下位3ビットの保持
+        MOV     BX, CX
+        AND     BX, 0x0007
+
+        ; バイト目のスキップ
+        MOV     AX, CX
+        SHR     AX, 3
+        ADD     SI, AX
+
+        ; ビット目の探索
+        MOV     AH, 0x80
+.bitShiftLoop:
+        CMP     BL, 0x00
+        JZ      .bitShiftNext
+        SHR     AH, 1
+        DEC     BL
+        JMP     .bitShiftLoop
+.bitShiftNext:
+        MOV BYTE AL, [SI]
+        AND     AH, AL
+        CMP     AH, 0x00
+        JZ      .aExit
+        MOV BYTE [.aRet], 0x01
+
+.aExit:
         CALL    rPopReg
+        MOV BYTE AH, [.aRet]
         RET
+.aRet:
+        DB      0x00
