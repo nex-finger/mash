@@ -45,7 +45,7 @@ cVersionLen:                            ; 版数文字列の長さ
         DW      18
 
 cVersionStr:                            ; 版数文字列の内容
-        DB      "mash system v0.5.0"
+        DB      "mash system v0.5.2"
 
 ; //////////////////////////////////////////////////////////////////////////// ;
 ; --- 変数 ---
@@ -116,7 +116,7 @@ mashInit:
         CALL    sysDim
 
         ; アクティブセクタをrootに設定
-        MOV WORD [sActiveSector], DIR_BIN
+        MOV WORD [sActiveSector], DIR_DOC
 
         ; デバッグ ---->
                 ;MOV     AH, 0x00                ; テスト変数
@@ -564,8 +564,15 @@ comList:
         RET
 
 ; pwd
+; __argc  : 制限なし
+; __argv0 : "pwd"固定
+; __argv1~argv9: 考慮しない
 comPwd:
         CALL    rPushReg
+
+        CALL    sysPwd
+        CALL    libSetCursolNextLine
+
         CALL    rPopReg
         RET
 
@@ -582,8 +589,24 @@ comDir:
         RET
 
 ; cd
+; __argc : 2
+; __argv0: "cd"固定
+; __argv1: ディレクトリ名       最大8文字まで
 comCd:
         CALL    rPushReg
+        
+        ; "__argv1" を取得
+        MOV     AL, 1
+        CALL    sysSetCmdLineStr        ; ALにすでに格納済み
+        CALL    sysGetCmdLineStr        ; BPに変数ポインタが返却
+        MOV     SI, BP
+        CALL    sysShellGet             ; DIに変数の内容の先頭ポインタが返却
+
+        MOV     SI, DI
+        ADD     SI, 11
+
+        CALL    sysCd
+
         CALL    rPopReg
         RET
 
@@ -1363,50 +1386,50 @@ sysLift:
         SUB     AH, 11
         MOV BYTE [sYpos], AH
 
-; スプライトのループ
+        ; スプライトのループ
         MOV     CH, 0x00
 .printContentLoop:
         MOV     SI, .aMona
         ; 1行のループ
         MOV     CL, 0x00
-        .printContentLineLoop:
-                MOV BYTE AH, [sYpos]
-                MOV     AH, 7                   ; 座標を更新
-                MOV BYTE [sXpos], AH
+.printContentLineLoop:
+        MOV BYTE AH, [sYpos]
+        MOV     AH, 7                   ; 座標を更新
+        MOV BYTE [sXpos], AH
 
-                ; 1文字のループ
-                MOV     DH, 0x00
-                .printContentSingle:
-                        MOV BYTE AL, [BP]
-                        CMP     AL, " "
-                        JZ      .printMona
-                        CALL    libPutchar              ; 1行表示
-                        CALL    libSetCursolNextCol     ; 次の列へ
-                        JMP     .singleNext
-                .printMona:
-                        MOV BYTE AL, [SI]
-                        CALL    libPutchar              ; 1行表示
-                        CALL    libSetCursolNextCol     ; 次の列へ
-                        JMP     .singleNext
+        ; 1文字のループ
+        MOV     DH, 0x00
+.printContentSingle:
+        MOV BYTE AL, [BP]
+        CMP     AL, " "
+        JZ      .printMona
+        CALL    libPutchar              ; 1行表示
+        CALL    libSetCursolNextCol     ; 次の列へ
+        JMP     .singleNext
+.printMona:
+        MOV BYTE AL, [SI]
+        CALL    libPutchar              ; 1行表示
+        CALL    libSetCursolNextCol     ; 次の列へ
+        JMP     .singleNext
 
-                .singleNext:
-                        INC     DH
-                        CMP     DH, 13                  ; 1行=13列
-                        JZ      .printContentSingleNext
-                        INC     BP
-                        INC     SI
-                        JMP     .printContentSingle
-                
-        .printContentSingleNext:
-                INC     SI
-                SUB     BP, 12
-                INC     CL
-                CMP     CL, 9                   ; 1スプライト=9行
-                JZ      .printContentLineNext
-                MOV BYTE AH, [sYpos]
-                INC     AH
-                MOV BYTE [sYpos], AH
-                JMP     .printContentLineLoop
+.singleNext:
+        INC     DH
+        CMP     DH, 13                  ; 1行=13列
+        JZ      .printContentSingleNext
+        INC     BP
+        INC     SI
+        JMP     .printContentSingle
+        
+.printContentSingleNext:
+        INC     SI
+        SUB     BP, 12
+        INC     CL
+        CMP     CL, 9                   ; 1スプライト=9行
+        JZ      .printContentLineNext
+        MOV BYTE AH, [sYpos]
+        INC     AH
+        MOV BYTE [sYpos], AH
+        JMP     .printContentLineLoop
 
 .printContentLineNext:
         ADD     BP, 13                  ; 次のスプライトへ
@@ -1586,8 +1609,94 @@ sysDir:
 ; 現在のディレクトリを標準出力に渡す
 sysPwd:
         CALL    rPushReg                ; レジスタ退避
+
+        ; メモリ確保
+        MOV     CX, 64
+        CALL    sysMalloc
+        MOV WORD [.aAllocMem], BP
+
+        ; メモリ0埋め
+        MOV WORD SI, [.aAllocMem]
+        MOV     CX, 0x0000
+.zerofillLoop:
+        MOV BYTE [SI], 0x00
+        INC     SI
+        INC     CX
+        CMP     CX, 64
+        JNZ     .zerofillLoop
+
+        ; 現在アクティブなセクタを確認する
+        MOV     AX, [sActiveSector]
+        MOV     [.aNowSec], AX
+        MOV     AX, 56
+        MOV     [.aOffset], AX
+
+        ; 親がnullになるまで繰り返し
+.getLoop:
+        MOV     CX, 512                 ; メモリ確保
+        CALL    sysMalloc
+        MOV     SI, BP
+
+        MOV WORD AX, [.aNowSec]         ; セクタ読み込み
+        CALL    libReadSector
+
+        ADD     SI, 1                   ; ファイル名格納
+        MOV     DI, [.aAllocMem]
+        ADD     DI, [.aOffset]
+        MOV     CX, 8
+        CALL    libMemcpy
+
+        ADD     SI, 23                  ; 親ディレクトリの取得
+        MOV WORD AX, [SI]
+
+        CALL    dbgPrint16bit
+
+        CMP     AX, 0x0000              ; ルートまで来たら終わり
+        JZ      .getNext
+
+        SUB     SI, 24                  ; メモリ解放
+        MOV     BP, SI
+        CALL    sysFree
+
+        MOV WORD [.aNowSec], AX          ; 親のセクタへ移動
+        MOV WORD AX, [.aOffset]
+        SUB     AX, 8
+        MOV WORD [.aOffset], AX
+        JMP     .getLoop
+
+.getNext:
+        SUB     SI, 24                  ; メモリ解放
+        MOV     BP, SI
+        CALL    sysFree
+
+        MOV     CX, 0x0000
+        MOV     BP, [.aAllocMem]
+.printLoop:
+        CALL    libPutsNoCRLF
+
+        MOV BYTE AL, [BP]
+        CMP     AL, 0x00
+        JZ      .noslash
+        MOV     AL, 0x5c
+        CALL    libPutchar
+        CALL    libSetCursolNextCol
+.noslash:
+        ADD     BP, 8
+        INC     CX
+        CMP     CX, 8
+        JNZ     .printLoop
+
+        MOV WORD BP, [.aAllocMem]       ; メモリの解放
+        CALL    sysFree
+
         CALL    rPopReg                 ; レジスタ取得
         RET
+.aAllocMem:
+        DW      0x0000
+.aNowSec:
+        DW      0x0000
+.aOffset:
+        DW      0x0000
 
 ; echo コマンド内部制御
 ; 文字列の表示(エスケープシーケンスあり)
@@ -1598,6 +1707,75 @@ sysEcho:
         CALL    rPopReg                 ; レジスタ取得
         RET
 
+; cd コマンド内部制御
+; アクティブセクタの移動
+; in  : SI      移動するディレクトリ名
+; out : sActiveSector
+sysCd:
+        CALL    rPushReg                ; レジスタ退避
+
+        ; 入力パラメータ保存
+        MOV     [.aInpuStr], SI
+
+        ; アクティブセクタの取得
+        MOV     CX, 512                 ; メモリ確保
+        CALL    sysMalloc
+        MOV     SI, BP
+        MOV WORD [.aActiveSector], SI
+        MOV WORD AX, [sActiveSector]    ; セクタ読み込み
+        CALL    libReadSector
+
+        ; 親ディレクトリか確認
+        MOV WORD BP, [.aInpuStr]
+        MOV BYTE AH, [BP]
+        CMP     AH, "."
+        JNZ     .findName
+        ADD     SI, 24                  ; 親のセクタに移動
+        MOV WORD AX, [SI]
+        MOV WORD [.aDstSec], AX
+        JMP     .changeSec
+
+        ; 子ディレクトリ一覧から探す
+        ADD     SI, 26                  ; 子ディレクトリの数を取得
+        MOV BYTE CH, [SI]
+        INC     SI
+.findName:
+        ; 子ディレクトリのセクタを開くためのメモリを確保する
+        ; 子ディレクトリのセクタがどこか確認する
+        ; 子ディレクトリのセクタを読み込む
+        ; ディレクトリ名を取得する
+        ; 子ディレクトリのセクタを開くためのメモリを解放する
+        
+        ; 入力文字列とディレクトリを比較する
+        ; 一致->目的地を更新してbreak 不一致->次の子ディレクトリへ移動
+
+        DEC     CH                      ; 全ての子ディレクトリを確認したら終了
+        CMP     CH, 0x00
+        JNZ     .findName
+        JMP     .exit
+
+        ; アクティブセクタを更新する
+.changeSec:
+        MOV WORD AX, [.aDstSec]
+        CMP     AX, 0x0000              ; rootの場合だめ
+        JZ      .exit
+        MOV WORD [sActiveSector], AX
+        JMP     .exit
+
+.exit:
+        ; アクティブセクタの解放
+        MOV WORD BP, [.aActiveSector]
+        CALL    sysFree
+
+        CALL    rPopReg                 ; レジスタ取得
+        RET
+.aInpuStr:
+        DW      0x0000
+.aActiveSector:
+        DW      0x0000
+.aDstSec:
+        DW      0x0000
+
 ; コマンドライン入力
 ; 256文字までとする
 ; in  : (なし、キーボードから)
@@ -1605,9 +1783,11 @@ sysEcho:
 sysInputCommand:
         CALL    rPushReg
 
-        MOV     AL, "\"        
-        CALL    libPutchar
-        CALL    libSetCursolNextCol
+        ;CALL    sysPwd
+
+        ;MOV     AL, " "        
+        ;CALL    libPutchar
+        ;CALL    libSetCursolNextCol
         MOV     AL, ">"
         CALL    libPutchar
         CALL    libSetCursolNextCol
