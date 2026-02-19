@@ -1735,23 +1735,61 @@ sysCd:
         MOV WORD [.aDstSec], AX
         JMP     .changeSec
 
+.findName:
         ; 子ディレクトリ一覧から探す
-        ADD     SI, 26                  ; 子ディレクトリの数を取得
+        ADD     SI, 26                   ; 子ディレクトリの数を取得
         MOV BYTE CH, [SI]
         INC     SI
-.findName:
+        MOV     [.aFindSec], SI
+.findLoop:
         ; 子ディレクトリのセクタを開くためのメモリを確保する
-        ; 子ディレクトリのセクタがどこか確認する
-        ; 子ディレクトリのセクタを読み込む
+        PUSH    CX
+        MOV     CX, 512                 ; メモリ確保
+        CALL    sysMalloc
+        MOV WORD [.aAllocMem], BP
+        POP     CX
+
+        ; 子ディレクトリのセクタがどこか確認して読み込む
+        MOV     SI, [.aAllocMem]
+        MOV     BP, [.aFindSec]
+        MOV     AX, [BP]
+        CALL    libReadSector
+
         ; ディレクトリ名を取得する
+        PUSH    CX
+        ADD     SI, 1
+        MOV     DI, .aDirName
+        MOV     CX, 8
+        CALL    libMemcpy
+        POP     CX
+
         ; 子ディレクトリのセクタを開くためのメモリを解放する
+        MOV WORD BP, [.aAllocMem]
+        CALL    sysFree
         
         ; 入力文字列とディレクトリを比較する
-        ; 一致->目的地を更新してbreak 不一致->次の子ディレクトリへ移動
+        MOV     [.aDstSec], AX
+        MOV     SI, [.aInpuStr]
+        MOV     DI, .aDirName
+        ; debug ---->
+                ;DEBUG_REGISTER_DUMP 8, SI
+                ;DEBUG_REGISTER_DUMP 8, DI
+        ; <-----
+        PUSH    CX
+        MOV     CX, 8
+        CALL    libStrcmp
+        POP     CX
 
+        ; 一致->目的地を更新してbreak 不一致->次の子ディレクトリへ移動
+        CMP     AX, 0x0000
+        JZ      .changeSec
+
+        MOV WORD AX, [.aFindSec]        ; 次の子ディレクトリへ
+        ADD     AX, 2
+        MOV WORD [.aFindSec], AX
         DEC     CH                      ; 全ての子ディレクトリを確認したら終了
         CMP     CH, 0x00
-        JNZ     .findName
+        JNZ     .findLoop
         JMP     .exit
 
         ; アクティブセクタを更新する
@@ -1774,6 +1812,12 @@ sysCd:
 .aActiveSector:
         DW      0x0000
 .aDstSec:
+        DW      0x0000
+.aDirName:
+        DB      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+.aFindSec:
+        DW      0x0000
+.aAllocMem:
         DW      0x0000
 
 ; コマンドライン入力
